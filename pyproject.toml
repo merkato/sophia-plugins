@@ -1,0 +1,18 @@
+# Narzędzia wspólne dla wszystkich wtyczek (testy, lint). Wtyczki nie są pakietami pip —
+# Sophia ładuje je z katalogu (sophia-plugin.json). Testy uruchamia scripts/test.sh w obrazie API Sophii.
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "RUF"]
+# FastAPI: Depends()/Query()/File() w argumentach domyślnych to idiom frameworka
+extend-ignore = ["B008", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/tests/*" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+addopts = "-q"

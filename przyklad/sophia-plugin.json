@@ -1,0 +1,19 @@
+{
+  "id": "przyklad",
+  "name": "Przykład",
+  "version": "1.0.0",
+  "description": "Wtyczka wzorcowa: notatki w panelu administracji — pokazuje manifest, migracje, API, uprawnienia i stronę WebUI.",
+  "sophia": ">=0.1",
+  "requires": {},
+  "capabilities": [
+    {"id": "przyklad.podglad", "title": "Czytanie notatek"},
+    {"id": "przyklad.zapis", "title": "Dodawanie notatek"}
+  ],
+  "api": {"package": "sophia_plugin_przyklad"},
+  "web": {
+    "entry": "web/index.js",
+    "pages": [
+      {"id": "notatki", "title": "Notatki (przykład)", "capability": "przyklad.podglad"}
+    ]
+  }
+}
