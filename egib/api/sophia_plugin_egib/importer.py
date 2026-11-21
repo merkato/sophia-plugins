@@ -364,6 +364,12 @@ def _merge(conn, imp_id: int, user_id: int | None) -> dict:
         """UPDATE egib.dzialka_uldk u SET zastapiona_importem = %s
             WHERE zastapiona_importem IS NULL AND EXISTS (SELECT 1 FROM egib.dzialka d WHERE d.id_dzialki = u.id_dzialki)""",
         (imp_id,)).rowcount
+    # uzupełnienia użytków w miejscach, które objął teraz GML (nowe/zmienione użytki tego importu)
+    stats["zastapione_uzupelnienia"] = conn.execute(
+        """UPDATE egib.uzytek_uzupelnienie s SET zastapiony_importem = %s
+            WHERE s.zastapiony_importem IS NULL
+              AND EXISTS (SELECT 1 FROM egib.uzytek u WHERE u.import_id = %s AND egib.nakladka(u.geom, s.geom))""",
+        (imp_id, imp_id)).rowcount
     conn.execute("""UPDATE egib.import SET status = 'zatwierdzony', postep = 'Zatwierdzony', statystyka = %s,
                            zatwierdzil = %s, zatwierdzono = now() WHERE id = %s""", (Jsonb(stats), user_id, imp_id))
     return stats

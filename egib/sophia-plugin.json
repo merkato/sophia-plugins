@@ -1,21 +1,26 @@
 {
   "id": "egib",
   "name": "EGiB — rejestr i import GML",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Import danych EGiB (GML wg rozporządzenia 2021) z wersjonowaniem: działki, użytki gruntowe, obręby, jednostki, punkty graniczne, zmiany. Rejestr ze stanem bieżącym i historią, uzupełniany działkami z ULDK.",
   "sophia": ">=0.1",
   "requires": {},
   "capabilities": [
     {"id": "egib.podglad", "title": "Przeglądanie rejestru EGiB"},
     {"id": "egib.import", "title": "Import plików GML"},
-    {"id": "egib.uldk", "title": "Dodawanie działek z ULDK"}
+    {"id": "egib.uldk", "title": "Uzupełnianie rejestru (działki z ULDK, użytki)"}
+  ],
+  "settings": [
+    {"id": "projekt", "title": "Projekt mapy", "type": "project",
+     "description": "Projekt, w którym „Pokaż na mapie” pokazuje działki i użytki (warstwy egib.v_dzialka, egib.v_uzytek)."}
   ],
   "api": {"package": "sophia_plugin_egib"},
   "web": {
     "entry": "web/index.js",
     "pages": [
       {"id": "importy", "title": "EGiB — importy", "capability": "egib.import"},
-      {"id": "rejestr", "title": "EGiB — rejestr", "capability": "egib.podglad"}
+      {"id": "rejestr", "title": "EGiB — rejestr", "capability": "egib.podglad"},
+      {"id": "uzupelnienia", "title": "EGiB — uzupełnienia użytków", "capability": "egib.uldk"}
     ]
   }
 }

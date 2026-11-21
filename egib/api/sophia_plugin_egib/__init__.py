@@ -20,10 +20,10 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.db import portal_conn
 from app.fetchers import FetchError, NotFound, limiter
-from app.plugins import data_dir, require_plugin
+from app.plugins import data_dir, get_settings_for, require_plugin
 from app.security import CurrentUser
 
-from . import importer, parser, uldk
+from . import importer, parser, uldk, uzupelnienia
 
 router = APIRouter()
 VIEW = require_plugin("egib", "egib.podglad")
@@ -383,6 +383,63 @@ async def uldk_job_stop(job_id: int, _: CurrentUser = Depends(ULDK)):
         await conn.execute("UPDATE egib.uldk_zadanie SET status = 'przerwane', zakonczono = now() WHERE id = %s AND status = 'w_toku'",
                            (job_id,))
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------- uzupełnienia użytków
+
+
+def _sync(fn, *args):
+    """Wywołanie kodu synchronicznego (psycopg) w wątku, w jednej transakcji."""
+    import asyncio
+
+    import psycopg
+
+    def run():
+        with psycopg.connect(_conninfo()) as conn:
+            out = fn(conn, *args)
+            conn.commit()
+            return out
+    return asyncio.to_thread(run)
+
+
+@router.get("/uzupelnienia")
+async def supplements(user: CurrentUser = Depends(ULDK)):
+    """Stan uzupełnień i grupy obrysów czekające na decyzję (z geometrią do podglądu na mapie)."""
+    stan = await _sync(uzupelnienia.summary)
+    grupy = await _sync(uzupelnienia.groups)
+    return {"stan": stan, "grupy": grupy, "projekt": (await get_settings_for("egib")).get("projekt")}
+
+
+class KeepIn(BaseModel):
+    kandydat_id: int | None = None
+
+
+def _decision(fn, *args):
+    async def run():
+        try:
+            return await _sync(fn, *args)
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        except Exception as exc:
+            if "nachodzi" in str(exc):
+                raise HTTPException(status.HTTP_409_CONFLICT, str(exc).splitlines()[0]) from exc
+            raise
+    return run()
+
+
+@router.post("/uzupelnienia/grupy/{grupa}/scal")
+async def supplement_merge(grupa: int, user: CurrentUser = Depends(ULDK)):
+    return {"uzupelnienie_id": await _decision(uzupelnienia.merge_group, grupa, user.login)}
+
+
+@router.post("/uzupelnienia/grupy/{grupa}/zostaw")
+async def supplement_keep(grupa: int, body: KeepIn, user: CurrentUser = Depends(ULDK)):
+    return {"uzupelnienie_id": await _decision(uzupelnienia.keep_one, grupa, body.kandydat_id, user.login)}
+
+
+@router.post("/uzupelnienia/scal-identyczne")
+async def supplement_merge_identical(user: CurrentUser = Depends(ULDK)):
+    return await _sync(uzupelnienia.merge_identical, user.login)
 
 
 # po /uldk/zadania/… — ścieżka {ident:path} łapałaby też je

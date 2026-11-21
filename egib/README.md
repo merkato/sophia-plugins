@@ -52,3 +52,14 @@ Gdzie nie ma jeszcze GML od starostwa, geometrię działki można pobrać z ULDK
   odrzucane. Mapowanie w Fii: identyfikator → `id_dzialki`, numer → `numer`, obręb → `obreb`, gmina →
   `gmina`, powiat → `powiat`, województwo → `wojewodztwo`. Kto może dodawać — prawo edycji warstwy
   w projekcie (grupy projektu); autor zmiany jest w dzienniku zmian Sophii.
+
+## Uzupełnienia użytków (od 1.3)
+- `egib.uzytek_uzupelnienie` — użytki spoza GML („uzupełnienie”: migracja, cała działka (Ls), ręcznie);
+  `egib.v_uzytek` — użytki bieżące: GML + uzupełnienia; zapis przez widok (dodanie = „ręcznie”), GML chroniony.
+- **W jednym miejscu jeden użytek:** część wspólna dwóch obrysów szersza niż 2 cm to konflikt
+  (`egib.nakladka`); trigger odrzuca taki zapis. Import GML oznacza uzupełnienia w objętym miejscu jako zastąpione.
+- **Kandydaci** (`egib.uzytek_kandydat`): partia obrysów do przyjęcia; bez konfliktów — przyjęte od razu,
+  nakładające się — grupy na stronie „EGiB — uzupełnienia użytków”: Scal / Zostaw największy / zostaw ten,
+  podgląd na mapie (projekt z ustawień wtyczki), „Scal wszystkie identyczne”.
+- Działki w `egib.dzialka_uldk` mają `pochodzenie` (`ULDK` / `migracja`); w widoku zawsze źródło „ULDK”.
+

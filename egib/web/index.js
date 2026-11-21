@@ -235,5 +235,67 @@ export function register(host) {
         : h("p", { className: "muted" }, "Brak wcześniejszych wersji."));
   }
 
-  return { pages: { importy: Importy, rejestr: Rejestr } };
+  // ------------------------------------------------------------------ uzupełnienia użytków (konflikty)
+  const POCH = { migracja: "migracja", cala_dzialka: "cała działka (Ls)", recznie: "ręcznie" };
+  const STAN = { oczekuje: "czeka", przyjety: "przyjęte", scalony: "scalone", odrzucony: "odrzucone" };
+
+  function Uzupelnienia() {
+    const [data, setData] = useState(null);
+    const [busy, setBusy] = useState(null);
+    const [error, setError] = useState(null);
+    const [filtr, setFiltr] = useState("wszystkie");
+    const load = useCallback(() => host.api("/uzupelnienia").then(setData).catch((e) => setError(e.message)), []);
+    useEffect(() => { load(); }, [load]);
+    if (!data) return h("p", { className: "muted" }, error || "Wczytywanie…");
+    const act = async (key, path, body, msg) => {
+      setBusy(key);
+      try {
+        const r = await host.api(path, { method: "POST", body: JSON.stringify(body || {}) });
+        host.notify(msg(r)); await load();
+      } catch (e) { setError(e.message); } finally { setBusy(null); }
+    };
+    const show = (g) => {
+      if (!data.projekt) { setError("Administrator nie wskazał projektu mapy (Wtyczki → EGiB → Ustawienia)"); return; }
+      host.showOnMap({ project: data.projekt, geometry: g.geometry, label: `Grupa ${g.grupa}: ${g.kandydaci.length} obrysy` });
+    };
+    const st = data.stan || {};
+    const ident = data.grupy.filter((g) => g.identyczne && !g.konflikt_z_rejestrem);
+    const lista = data.grupy.filter((g) => filtr === "wszystkie" || (filtr === "identyczne" ? g.identyczne : !g.identyczne));
+    return h("div", { className: "egib" },
+      error && h("div", { className: "error", onClick: () => setError(null) }, error),
+      h("p", null, "Użytki spoza importu GML (uzupełnienia): ",
+        Object.entries(st.uzupelnienia || {}).map(([k, v]) => `${POCH[k] || k} ${v}`).join(", ") || "brak",
+        " · kandydaci: ", Object.entries(st.kandydaci || {}).map(([k, v]) => `${STAN[k] || k} ${v}`).join(", ") || "brak"),
+      h("p", { className: "muted" }, "W jednym miejscu może być tylko jeden użytek: obrysy, których część wspólna jest szersza niż 2 cm, ",
+        "czekają tu na decyzję. „Scal” łączy obrysy w jeden użytek, „Zostaw” przyjmuje jeden (domyślnie największy), pozostałe odrzuca."),
+      data.grupy.length === 0 ? h("p", null, "Nic nie czeka na decyzję.") : h("div", null,
+        h("div", { className: "actions" },
+          ident.length > 0 && h("button", { className: "primary", disabled: !!busy,
+            onClick: () => window.confirm(`Scalić ${ident.length} grup z identycznymi obrysami (±2 cm)?`)
+              && act("ident", "/uzupelnienia/scal-identyczne", null, (r) => `Scalono ${r.scalone} grup` + (r.bledy.length ? `, błędy: ${r.bledy.length}` : "")) },
+            `Scal wszystkie identyczne (${ident.length})`),
+          h("select", { value: filtr, onChange: (e) => setFiltr(e.target.value) },
+            h("option", { value: "wszystkie" }, `wszystkie grupy (${data.grupy.length})`),
+            h("option", { value: "identyczne" }, "tylko identyczne obrysy"),
+            h("option", { value: "rozne" }, "tylko różne obrysy (do przejrzenia)"))),
+        h("table", { className: "grid", style: { marginTop: 8 } },
+          h("thead", null, h("tr", null, ["Grupa", "Obrysy (od największego)", "", "Decyzja"].map((t, i) => h("th", { key: i }, t)))),
+          h("tbody", null, lista.map((g) => h("tr", { key: g.grupa },
+            h("td", null, g.grupa, h("div", { className: "muted" }, g.identyczne ? "identyczne" : "różne"),
+              g.konflikt_z_rejestrem ? h("div", { className: "muted" }, "nachodzi na rejestr") : null),
+            h("td", null, g.kandydaci.map((k, i) => h("div", { key: k.id },
+              `#${k.id} · ${(k.pow_m2 / 10000).toFixed(4)} ha${k.pow_ewid_ha != null ? ` (ewid. ${k.pow_ewid_ha})` : ""} · `,
+              h("span", { className: "muted" }, (k.zrodla || []).join(", ")),
+              k.uwaga ? h("span", { className: "muted" }, ` · ${k.uwaga}`) : null,
+              i > 0 && h("button", { style: { marginLeft: 6 }, disabled: !!busy,
+                onClick: () => act(`z${g.grupa}`, `/uzupelnienia/grupy/${g.grupa}/zostaw`, { kandydat_id: k.id }, () => `Grupa ${g.grupa}: zostawiono #${k.id}`) },
+                "zostaw ten")))),
+            h("td", null, h("button", { onClick: () => show(g) }, "Przejrzyj na mapie")),
+            h("td", null,
+              h("button", { disabled: !!busy, onClick: () => act(`s${g.grupa}`, `/uzupelnienia/grupy/${g.grupa}/scal`, null, () => `Grupa ${g.grupa}: scalono`) }, "Scal"), " ",
+              h("button", { disabled: !!busy, onClick: () => act(`z${g.grupa}`, `/uzupelnienia/grupy/${g.grupa}/zostaw`, {}, () => `Grupa ${g.grupa}: zostawiono największy`) },
+                "Zostaw największy"))))))));
+  }
+
+  return { pages: { importy: Importy, rejestr: Rejestr, uzupelnienia: Uzupelnienia } };
 }
