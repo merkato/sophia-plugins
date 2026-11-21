@@ -256,7 +256,7 @@ export function register(host) {
     };
     const show = (g) => {
       if (!data.projekt) { setError("Administrator nie wskazał projektu mapy (Wtyczki → EGiB → Ustawienia)"); return; }
-      host.showOnMap({ project: data.projekt, geometry: g.geometry, label: `Grupa ${g.grupa}: ${g.kandydaci.length} obrysy` });
+      host.showOnMap({ project: data.projekt, geometry: g.geometry, label: `Grupa ${g.grupa}: ${g.kandydaci.length} obrysy`, newTab: true });
     };
     const st = data.stan || {};
     const ident = data.grupy.filter((g) => g.identyczne && !g.konflikt_z_rejestrem);
@@ -290,7 +290,7 @@ export function register(host) {
               i > 0 && h("button", { style: { marginLeft: 6 }, disabled: !!busy,
                 onClick: () => act(`z${g.grupa}`, `/uzupelnienia/grupy/${g.grupa}/zostaw`, { kandydat_id: k.id }, () => `Grupa ${g.grupa}: zostawiono #${k.id}`) },
                 "zostaw ten")))),
-            h("td", null, h("button", { onClick: () => show(g) }, "Przejrzyj na mapie")),
+            h("td", null, h("button", { onClick: () => show(g), title: "Otwiera mapę w nowej karcie" }, "Przejrzyj na mapie ↗")),
             h("td", null,
               h("button", { disabled: !!busy, onClick: () => act(`s${g.grupa}`, `/uzupelnienia/grupy/${g.grupa}/scal`, null, () => `Grupa ${g.grupa}: scalono`) }, "Scal"), " ",
               h("button", { disabled: !!busy, onClick: () => act(`z${g.grupa}`, `/uzupelnienia/grupy/${g.grupa}/zostaw`, {}, () => `Grupa ${g.grupa}: zostawiono największy`) },
