@@ -46,3 +46,9 @@ Gdzie nie ma jeszcze GML od starostwa, geometrię działki można pobrać z ULDK
   `ULDK:<id_dzialki>`). Warstwa działek w projekcie QGIS powinna korzystać z tego widoku.
 - Import GML, który przyniesie działkę z ULDK, oznacza ją jako zastąpioną (`zastapiona_importem`);
   widok bierze wtedy dane EGiB.
+- **Od 1.2 widok przyjmuje zapis** (triggery `INSTEAD OF`): warstwa `egib.v_dzialka` w projekcie może być
+  celem narzędzia pobierania ULDK z Fii (główne okno mapy). Dodanie → `egib.dzialka_uldk` (klucz
+  `ULDK:<id>`); zmiana i usunięcie tylko działek z ULDK; działki z importu GML są chronione, duplikaty
+  odrzucane. Mapowanie w Fii: identyfikator → `id_dzialki`, numer → `numer`, obręb → `obreb`, gmina →
+  `gmina`, powiat → `powiat`, województwo → `wojewodztwo`. Kto może dodawać — prawo edycji warstwy
+  w projekcie (grupy projektu); autor zmiany jest w dzienniku zmian Sophii.
