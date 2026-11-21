@@ -1,0 +1,28 @@
+{
+  "id": "eksport",
+  "name": "Eksport danych",
+  "version": "1.0.0",
+  "description": "Pobieranie danych do XLSX, CSV, GeoPackage i paczki SHP (mLas): warstwy projektu wskazane przez administratora (cały zakres albo bieżący widok mapy) oraz zestawienia udostępniane przez inne wtyczki. Zakres danych użytkownika zawsze obowiązuje; każde pobranie trafia do dziennika.",
+  "sophia": ">=0.7",
+  "requires": {},
+  "settings": [
+    {"id": "kodowanie_shp", "title": "Kodowanie plików SHP (paczka mLas)", "type": "text",
+     "description": "UTF-8 albo CP1250 — według wymagań programu, który wczytuje paczkę. Puste: UTF-8."}
+  ],
+  "capabilities": [
+    {"id": "eksport.pobieranie", "title": "Pobieranie danych (XLSX, CSV, GeoPackage, mLas)"},
+    {"id": "eksport.konfiguracja", "title": "Konfiguracja eksportu i dziennik pobrań"}
+  ],
+  "api": {"package": "sophia_plugin_eksport"},
+  "web": {
+    "entry": "web/index.js",
+    "menu": "Eksport",
+    "pages": [
+      {"id": "konfiguracja", "title": "Konfiguracja", "capability": "eksport.konfiguracja"},
+      {"id": "dziennik", "title": "Dziennik pobrań", "capability": "eksport.konfiguracja"}
+    ],
+    "windows": [
+      {"id": "pobierz", "title": "Pobierz", "capability": "eksport.pobieranie"}
+    ]
+  }
+}
