@@ -39,6 +39,9 @@ def fetch_by_id(ident: str, client: httpx.Client | None = None) -> tuple[dict, s
     try:
         raw = parse_uldk(r.text, RESULT)
     except NotFound as e:
+        # ULDK pyta usługę powiatu; jej awaria też daje „brak wyników”, ale z dopiskiem o błędnej odpowiedzi
+        if "błędny format" in r.text.lower() or "nie odpowiada" in r.text.lower():
+            raise FetchError(f"Usługa powiatu (przez ULDK) zwróciła błąd dla {ident} — spróbuj później") from e
         raise NotFound(f"ULDK nie zna działki {ident}") from e
     ewkt = raw["geom_wkt"]
     if not ewkt.upper().startswith("SRID="):

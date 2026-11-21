@@ -41,6 +41,10 @@ def test_fetch_by_id_parses_and_normalizes():
 def test_fetch_by_id_errors():
     with pytest.raises(NotFound):
         uldk.fetch_by_id("999901_2.0001.13", FakeClient("-1 brak wyników\n"))
+    county = "-1 brak wyników\nbłędny format odpowiedzi XML, usługa zwróciła odpowiedź…\n"
+    with pytest.raises(FetchError) as e:          # awaria usługi powiatu — nie „brak działki”
+        uldk.fetch_by_id("999901_2.0001.13", FakeClient(county))
+    assert not isinstance(e.value, NotFound)
     with pytest.raises(FetchError):
         uldk.fetch_by_id("999901_2.0001.13", FakeClient("", status=500))
     other = "0\n999901_2.0001.99|w|p|g|o|99|SRID=2180;POLYGON((0 0,0 1,1 1,0 0))\n"
