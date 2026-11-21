@@ -1,7 +1,7 @@
 {
   "id": "egib",
   "name": "EGiB — rejestr i import GML",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Import danych EGiB (GML wg rozporządzenia 2021) z wersjonowaniem: działki, użytki gruntowe, obręby, jednostki, punkty graniczne, zmiany. Rejestr ze stanem bieżącym i historią, uzupełniany działkami z ULDK.",
   "sophia": ">=0.1",
   "requires": {},

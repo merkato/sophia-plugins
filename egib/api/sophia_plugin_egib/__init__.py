@@ -357,6 +357,15 @@ async def uldk_batch(body: ZadanieIn, user: CurrentUser = Depends(ULDK)):
     return {"id": job["id"], "liczba": len(ids)}
 
 
+@router.get("/uldk/zadania")
+async def uldk_jobs(_: CurrentUser = Depends(ULDK)):
+    """Ostatnie zadania hurtowe (np. żeby po powrocie na stronę pokazać trwające pobieranie)."""
+    async with portal_conn() as conn:
+        return await (await conn.execute(
+            """SELECT id, status, cardinality(ids) AS liczba, zrobione, wynik, utworzyl_login, utworzono, zakonczono
+                 FROM egib.uldk_zadanie ORDER BY id DESC LIMIT 5""")).fetchall()
+
+
 @router.get("/uldk/zadania/{job_id}")
 async def uldk_job(job_id: int, _: CurrentUser = Depends(ULDK)):
     async with portal_conn() as conn:
