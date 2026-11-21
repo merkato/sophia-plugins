@@ -173,7 +173,43 @@ export function register(host) {
         h("tbody", null, list.map((d) => h("tr", { key: d.klucz, onClick: () => open(d.klucz), style: { cursor: "pointer" } },
           h("td", null, d.id_dzialki), h("td", null, d.pole_ewid_ha), h("td", null, (d.pow_geom_m2 / 10000).toFixed(4)),
           h("td", null, fmtDate(d.wazna_od)))))),
+      host.can("egib.uldk") && h(ZUldk, { onError: setError }),
       det && h(Dzialka, { det }));
+  }
+
+  // Działka z ULDK (GUGiK) po identyfikatorze — tam, gdzie nie ma jeszcze importu GML od starostwa
+  function ZUldk({ onError }) {
+    const [id, setId] = useState("");
+    const [prev, setPrev] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const look = async () => {
+      setBusy(true); setPrev(null);
+      try { setPrev(await host.api(`/uldk/${encodeURIComponent(id.trim())}`)); } catch (e) { onError(e.message); } finally { setBusy(false); }
+    };
+    const save = async () => {
+      setBusy(true);
+      try {
+        await host.api("/uldk", { method: "POST", body: JSON.stringify({ id_dzialki: id.trim() }) });
+        host.notify(`Dodano działkę ${id.trim()} z ULDK`);
+        setPrev(null); setId("");
+      } catch (e) { onError(e.message); } finally { setBusy(false); }
+    };
+    const p = prev && prev.wlasciwosci;
+    return h("div", { className: "form", style: { marginTop: 18, maxWidth: 760 } },
+      h("h4", null, "Dodaj działkę z ULDK"),
+      h("p", { className: "muted" }, "Geometria z usługi GUGiK dla działek, których nie ma w imporcie GML. Gdy później przyjdzie GML ze starostwa, ",
+        "rejestr użyje danych EGiB, a wersja z ULDK zostanie oznaczona jako zastąpiona."),
+      h("div", { className: "inline" },
+        h("input", { value: id, placeholder: "Identyfikator działki, np. 260503_5.0004.2713/2", onChange: (e) => setId(e.target.value),
+          onKeyDown: (e) => e.key === "Enter" && id.trim() && look() }),
+        h("button", { disabled: !id.trim() || busy, onClick: look }, "Sprawdź w ULDK")),
+      p && h("div", { style: { marginTop: 8 } },
+        h("p", null, `${p.teryt}: działka ${p.numer || "?"}, obręb ${p.obreb || p.obreb_nr}, gmina ${p.gmina}, powiat ${p.powiat} · `,
+          `pow. geometryczna ${prev.pow_geom_ha} ha`),
+        prev.w_rejestrze && h("div", { className: "notice" }, `Działka jest już w rejestrze (źródło: ${prev.w_rejestrze}).`
+          + (prev.w_rejestrze === "ULDK" ? " Zapis odświeży geometrię." : "")),
+        h("div", { className: "actions" },
+          h("button", { className: "primary", disabled: busy || prev.w_rejestrze === "EGiB", onClick: save }, "Zapisz w rejestrze"))));
   }
 
   function Dzialka({ det }) {

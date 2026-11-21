@@ -1,13 +1,14 @@
 {
   "id": "egib",
   "name": "EGiB — rejestr i import GML",
-  "version": "1.0.0",
-  "description": "Import danych EGiB (GML wg rozporządzenia 2021) z wersjonowaniem: działki, użytki gruntowe, obręby, jednostki, punkty graniczne, zmiany. Rejestr ze stanem bieżącym i historią.",
+  "version": "1.1.0",
+  "description": "Import danych EGiB (GML wg rozporządzenia 2021) z wersjonowaniem: działki, użytki gruntowe, obręby, jednostki, punkty graniczne, zmiany. Rejestr ze stanem bieżącym i historią, uzupełniany działkami z ULDK.",
   "sophia": ">=0.1",
   "requires": {},
   "capabilities": [
     {"id": "egib.podglad", "title": "Przeglądanie rejestru EGiB"},
-    {"id": "egib.import", "title": "Import plików GML"}
+    {"id": "egib.import", "title": "Import plików GML"},
+    {"id": "egib.uldk", "title": "Dodawanie działek z ULDK"}
   ],
   "api": {"package": "sophia_plugin_egib"},
   "web": {

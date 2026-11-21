@@ -359,6 +359,11 @@ def _merge(conn, imp_id: int, user_id: int | None) -> dict:
     stats["zmiany_nowe"] = old.get("zmiany_nowe")
     if "brak_w_pliku" in old:
         stats["brak_w_pliku"] = old["brak_w_pliku"]
+    # działki z ULDK, które przyszły teraz z GML, przestają być używane (widok v_dzialka bierze EGiB)
+    stats["zastapione_uldk"] = conn.execute(
+        """UPDATE egib.dzialka_uldk u SET zastapiona_importem = %s
+            WHERE zastapiona_importem IS NULL AND EXISTS (SELECT 1 FROM egib.dzialka d WHERE d.id_dzialki = u.id_dzialki)""",
+        (imp_id,)).rowcount
     conn.execute("""UPDATE egib.import SET status = 'zatwierdzony', postep = 'Zatwierdzony', statystyka = %s,
                            zatwierdzil = %s, zatwierdzono = now() WHERE id = %s""", (Jsonb(stats), user_id, imp_id))
     return stats

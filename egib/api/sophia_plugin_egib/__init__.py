@@ -4,6 +4,9 @@ Przebieg importu: POST /importy (nazwa, rozmiar, zakres, warstwy) → PUT /impor
 (plik w częściach — proxy Sophii ogranicza pojedyncze żądanie) → [POST /importy/{id}/klauzula] →
 POST /importy/{id}/wczytaj (w tle: walidacja, podgląd) → [PUT /importy/{id}/zakres] →
 POST /importy/{id}/zatwierdz (w tle: scalanie w jednej transakcji) albo POST /importy/{id}/odrzuc.
+
+Działki z ULDK (uprawnienie egib.uldk): GET /uldk/{id} (podgląd), POST /uldk (zapis), POST /uldk/zadania
+(pobieranie hurtowe w tle) i GET /uldk/zadania/{id}. POST /stan — źródło geometrii działek (dla innych wtyczek).
 """
 from __future__ import annotations
 
@@ -16,14 +19,16 @@ from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.db import portal_conn
+from app.fetchers import FetchError, NotFound, limiter
 from app.plugins import data_dir, require_plugin
 from app.security import CurrentUser
 
-from . import importer, parser
+from . import importer, parser, uldk
 
 router = APIRouter()
 VIEW = require_plugin("egib", "egib.podglad")
 IMPORT = require_plugin("egib", "egib.import")
+ULDK = require_plugin("egib", "egib.uldk")
 MAX_CHUNK = 16 * 1024 * 1024
 MAX_FILE = 4 * 1024 * 1024 * 1024
 WARSTWY = ("jednostka", "obreb", "dzialka", "uzytek", "punkt")
@@ -39,6 +44,7 @@ async def startup() -> None:
         await conn.execute("""UPDATE egib.import SET status = 'roboczy',
                                    postep = 'Scalanie przerwane restartem serwera (rejestr bez zmian) — zatwierdź ponownie'
                              WHERE status = 'scalanie'""")
+        await conn.execute("UPDATE egib.uldk_zadanie SET status = 'przerwane', zakonczono = now() WHERE status = 'w_toku'")
 
 
 def _conninfo() -> str:
@@ -265,3 +271,121 @@ async def changes(body: ZmianyIn, _: CurrentUser = Depends(VIEW)):
                  FROM k LEFT JOIN egib.dzialka d ON d.klucz = k.klucz""",
             {"k": body.klucze, "i": body.id_dzialki, "od": body.od})).fetchall()
     return [{**r, "zamknieta": r["id_dzialki_dzis"] is None, "zmieniona": bool(r["wersje"])} for r in rows]
+
+
+# ---------------------------------------------------------------------------- ULDK
+
+
+class StanIn(BaseModel):
+    ids: list[str] = Field(max_length=10000)
+
+
+@router.post("/stan")
+async def parcels_state(body: StanIn, _: CurrentUser = Depends(require_plugin("egib"))):
+    """Dla listy identyfikatorów: czy działka ma geometrię i skąd (EGiB / ULDK), klucz w widoku egib.v_dzialka."""
+    import psycopg
+
+    def run():
+        with psycopg.connect(_conninfo()) as conn:
+            return uldk.state(conn, body.ids)
+    import asyncio
+    return await asyncio.to_thread(run)
+
+
+def _check_id(ident: str) -> str:
+    ident = ident.strip()
+    if not uldk.valid_id(ident):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Niepoprawny identyfikator działki: {ident}")
+    return ident
+
+
+async def _fetch(ident: str, user: CurrentUser):
+    import asyncio
+    if not limiter.check(user.id):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Za dużo zapytań do ULDK — odczekaj chwilę")
+    try:
+        return await asyncio.to_thread(uldk.fetch_by_id, ident)
+    except NotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except FetchError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+
+class UldkIn(BaseModel):
+    id_dzialki: str = Field(min_length=10, max_length=80)
+
+
+@router.post("/uldk", status_code=201)
+async def uldk_add(body: UldkIn, user: CurrentUser = Depends(ULDK)):
+    """Pobranie działki z ULDK i zapis w egib.dzialka_uldk (ponowne pobranie odświeża geometrię)."""
+    ident = _check_id(body.id_dzialki)
+    async with portal_conn() as conn:
+        egib_row = await (await conn.execute("SELECT 1 FROM egib.dzialka WHERE id_dzialki = %s", (ident,))).fetchone()
+    if egib_row:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Działka jest już w rejestrze z importu EGiB")
+    props, ewkt = await _fetch(ident, user)
+    import psycopg
+
+    def run():
+        with psycopg.connect(_conninfo()) as conn:
+            uldk.save(conn, props, ewkt, user.login)
+            conn.commit()
+    import asyncio
+    await asyncio.to_thread(run)
+    return {"id_dzialki": ident, "klucz": f"ULDK:{ident}", "wlasciwosci": props}
+
+
+class ZadanieIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=uldk.MAX_BATCH)
+
+
+@router.post("/uldk/zadania", status_code=201)
+async def uldk_batch(body: ZadanieIn, user: CurrentUser = Depends(ULDK)):
+    """Pobieranie hurtowe w tle (około 1 działki na sekundę); pomija działki, które już mają geometrię."""
+    ids = list(dict.fromkeys(i.strip() for i in body.ids if i.strip()))
+    bad = [i for i in ids if not uldk.valid_id(i)]
+    if bad:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Niepoprawne identyfikatory: {', '.join(bad[:10])}")
+    async with portal_conn() as conn:
+        busy = await (await conn.execute("SELECT id FROM egib.uldk_zadanie WHERE status = 'w_toku' LIMIT 1")).fetchone()
+        if busy:
+            raise HTTPException(status.HTTP_409_CONFLICT, f"Trwa już pobieranie (zadanie #{busy['id']})")
+        job = await (await conn.execute(
+            "INSERT INTO egib.uldk_zadanie (ids, utworzyl_login) VALUES (%s, %s) RETURNING id", (ids, user.login))).fetchone()
+    threading.Thread(target=uldk.run_batch, args=(_conninfo(), job["id"], user.login), daemon=True,
+                     name=f"egib-uldk-{job['id']}").start()
+    return {"id": job["id"], "liczba": len(ids)}
+
+
+@router.get("/uldk/zadania/{job_id}")
+async def uldk_job(job_id: int, _: CurrentUser = Depends(ULDK)):
+    async with portal_conn() as conn:
+        row = await (await conn.execute(
+            """SELECT id, status, cardinality(ids) AS liczba, zrobione, wynik, utworzyl_login, utworzono, zakonczono
+                 FROM egib.uldk_zadanie WHERE id = %s""", (job_id,))).fetchone()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Brak zadania")
+    return row
+
+
+@router.post("/uldk/zadania/{job_id}/przerwij")
+async def uldk_job_stop(job_id: int, _: CurrentUser = Depends(ULDK)):
+    async with portal_conn() as conn:
+        await conn.execute("UPDATE egib.uldk_zadanie SET status = 'przerwane', zakonczono = now() WHERE id = %s AND status = 'w_toku'",
+                           (job_id,))
+    return {"ok": True}
+
+
+# po /uldk/zadania/… — ścieżka {ident:path} łapałaby też je
+@router.get("/uldk/{ident:path}")
+async def uldk_preview(ident: str, crs: int = 4326, user: CurrentUser = Depends(ULDK)):
+    """Podgląd działki z ULDK (bez zapisu) i informacja, czy już jest w rejestrze."""
+    ident = _check_id(ident)
+    props, ewkt = await _fetch(ident, user)
+    async with portal_conn() as conn:
+        row = await (await conn.execute(
+            """SELECT ST_AsGeoJSON(ST_Transform(ST_GeomFromEWKT(%s), %s), 7)::json AS geometry,
+                      round(ST_Area(ST_GeomFromEWKT(%s))::numeric / 10000, 4) AS pow_geom_ha,
+                      (SELECT zrodlo FROM egib.v_dzialka WHERE id_dzialki = %s LIMIT 1) AS w_rejestrze""",
+            (ewkt, crs, ewkt, ident))).fetchone()
+    return {"wlasciwosci": props, **row}
