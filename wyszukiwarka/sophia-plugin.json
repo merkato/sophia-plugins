@@ -1,0 +1,23 @@
+{
+  "id": "wyszukiwarka",
+  "name": "Wyszukiwarka",
+  "version": "1.0.0",
+  "description": "Wyszukiwanie obiektów w projekcie mapy: administrator wskazuje warstwy i pola, Sophia pilnuje, co użytkownik może znaleźć (prawa warstw, filtr warstwy, zakres danych).",
+  "sophia": ">=0.6",
+  "requires": {},
+  "capabilities": [
+    {"id": "wyszukiwarka.szukaj", "title": "Wyszukiwanie na mapie"},
+    {"id": "wyszukiwarka.konfiguracja", "title": "Konfiguracja wyszukiwarki (warstwy i pola)"}
+  ],
+  "api": {"package": "sophia_plugin_wyszukiwarka"},
+  "web": {
+    "entry": "web/index.js",
+    "menu": "Wyszukiwarka",
+    "pages": [
+      {"id": "konfiguracja", "title": "Konfiguracja", "capability": "wyszukiwarka.konfiguracja"}
+    ],
+    "windows": [
+      {"id": "szukaj", "title": "Szukaj", "capability": "wyszukiwarka.szukaj"}
+    ]
+  }
+}

@@ -7,6 +7,7 @@ z manifestem `sophia-plugin.json`. Opis systemu wtyczek, manifestu, API i interf
 | Wtyczka | Opis |
 |---|---|
 | [`egib`](egib/) | Import danych EGiB (GML wg rozporządzenia 2021) z wersjonowaniem: działki, użytki gruntowe, obręby, jednostki, punkty graniczne, zmiany; rejestr ze stanem bieżącym i historią; raport zmian dla listy działek |
+| [`wyszukiwarka`](wyszukiwarka/) | Okno „Szukaj” nad mapą: wyszukiwanie w warstwach i polach wskazanych dla projektu; użytkownik znajduje tylko to, co może zobaczyć (prawa warstw, filtr warstwy, zakres danych) |
 | [`przyklad`](przyklad/) | Wtyczka wzorcowa (notatki) — manifest, migracje, API, uprawnienia, strona WebUI |
 
 ## Instalacja na serwerze Sophii
