@@ -362,8 +362,10 @@ def _merge(conn, imp_id: int, user_id: int | None) -> dict:
     # działki z ULDK, które przyszły teraz z GML, przestają być używane (widok v_dzialka bierze EGiB)
     stats["zastapione_uldk"] = conn.execute(
         """UPDATE egib.dzialka_uldk u SET zastapiona_importem = %s
-            WHERE zastapiona_importem IS NULL AND EXISTS (SELECT 1 FROM egib.dzialka d WHERE d.id_dzialki = u.id_dzialki)""",
-        (imp_id,)).rowcount
+            WHERE zastapiona_importem IS NULL AND wycofana IS NULL
+              AND (EXISTS (SELECT 1 FROM egib.dzialka d WHERE d.id_dzialki = u.id_dzialki)
+                   OR EXISTS (SELECT 1 FROM egib.dzialka d WHERE d.import_id = %s AND egib.nakladka(d.geom, u.geom)))""",
+        (imp_id, imp_id)).rowcount
     # uzupełnienia użytków w miejscach, które objął teraz GML (nowe/zmienione użytki tego importu)
     stats["zastapione_uzupelnienia"] = conn.execute(
         """UPDATE egib.uzytek_uzupelnienie s SET zastapiony_importem = %s

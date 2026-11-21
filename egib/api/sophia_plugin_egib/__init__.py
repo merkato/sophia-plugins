@@ -328,11 +328,15 @@ async def uldk_add(body: UldkIn, user: CurrentUser = Depends(ULDK)):
 
     def run():
         with psycopg.connect(_conninfo()) as conn:
-            uldk.save(conn, props, ewkt, user.login)
+            actions = uldk.save(conn, props, ewkt, user.login)
             conn.commit()
+            return actions
     import asyncio
-    await asyncio.to_thread(run)
-    return {"id_dzialki": ident, "klucz": f"ULDK:{ident}", "wlasciwosci": props}
+    try:
+        actions = await asyncio.to_thread(run)
+    except uldk.ConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return {"id_dzialki": ident, "klucz": f"ULDK:{ident}", "wlasciwosci": props, "dzialania": actions}
 
 
 class ZadanieIn(BaseModel):

@@ -62,4 +62,13 @@ Gdzie nie ma jeszcze GML od starostwa, geometrię działki można pobrać z ULDK
   nakładające się — grupy na stronie „EGiB — uzupełnienia użytków”: Scal / Zostaw największy / zostaw ten,
   podgląd na mapie (projekt z ustawień wtyczki), „Scal wszystkie identyczne”.
 - Działki w `egib.dzialka_uldk` mają `pochodzenie` (`ULDK` / `migracja`); w widoku zawsze źródło „ULDK”.
+- **Od 1.4–1.5:** uzupełnienia użytków mają `id_obrebu` (obręb działki pod spodem) i `id_uzytku` = `<obręb>.UZU.<nr>`
+  (jak `…UG.<nr>` w EGiB) — wyliczane przy zapisie, zwracane przez widok. Nazwy obrębów i gmin dla działek
+  uzupełnień bez nazw: `python -m sophia_plugin_egib.nazwy` (ULDK, dane PRG).
 
+- **Od 1.5 — jedna aktywna działka w miejscu** (część wspólna > 2 cm = konflikt; trigger na `egib.dzialka_uldk`).
+  Przy pobieraniu z ULDK nakładka jest rozstrzygana: działka z GML ma pierwszeństwo; to samo miejsce (≥ 50%
+  mniejszej działki) — decyduje ULDK w punkcie wspólnej części, nieaktualna działka jest **wycofywana**
+  (`wycofana`, `wycofanie_powod`, `zastapiona_przez`), nie usuwana; drobna zakładka na granicy (obie aktualne) —
+  docięcie działki o mniejszym znaczeniu (uwaga w `uwagi`). Import GML zastępuje nakładające się działki z ULDK.
+  Naprawa istniejących nakładek: `python -m sophia_plugin_egib.nakladki [--proba]`.
