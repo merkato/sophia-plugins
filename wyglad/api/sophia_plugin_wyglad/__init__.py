@@ -11,7 +11,7 @@ Endpointy pod /api/plugins/wyglad/…:
   POST /motywy {nazwa, z}              — nowy motyw własny (kopia istniejącego)
   PUT  /motywy/{id}; DELETE            — edycja / usunięcie motywu własnego
   POST /logo (PNG albo WEBP); DELETE /logo
-  GET  /projekty; PUT /projekty/{slug} {motyw | null} — motywy przypisane do projektów
+  GET  /projekty; PUT /projekty/{slug} {motyw, panel_warstw} — motyw i panel warstw projektu (null — ogólne)
 """
 from __future__ import annotations
 
@@ -51,12 +51,12 @@ async def _ustawienia(swieze: bool = False) -> dict:
         return _PAMIEC["u"]
     async with portal_conn() as conn:
         u = await (await conn.execute(
-            """SELECT motyw, tryb, nazwa, pokaz_nazwe, logo, logo_wysokosc, wersja, zmieniono, zmienil
+            """SELECT motyw, tryb, nazwa, pokaz_nazwe, logo, logo_wysokosc, panel_warstw, wersja, zmieniono, zmienil
                  FROM wyglad.ustawienia""")).fetchone()
-        projekty = await (await conn.execute("SELECT projekt, motyw FROM wyglad.projekt")).fetchall()
+        projekty = await (await conn.execute("SELECT projekt, motyw, panel_warstw FROM wyglad.projekt")).fetchall()
     u = dict(u) if u else {"motyw": "sophia", "tryb": "auto", "nazwa": "", "pokaz_nazwe": True, "logo": None,
-                           "logo_wysokosc": 32, "wersja": 1}
-    u["projekty"] = {r["projekt"]: r["motyw"] for r in projekty}
+                           "logo_wysokosc": 32, "panel_warstw": "otwarty", "wersja": 1}
+    u["projekty"] = {r["projekt"]: {"motyw": r["motyw"], "panel_warstw": r["panel_warstw"]} for r in projekty}
     _PAMIEC.update(t=time.monotonic(), u=u)
     return u
 
@@ -82,13 +82,19 @@ async def _zmiana(conn, user: CurrentUser) -> None:
 
 def motyw_dla(u: dict, projekt: str | None) -> str:
     """Motyw projektu (jeśli przypisany), inaczej ogólny."""
-    return (u.get("projekty") or {}).get(projekt or "") or u["motyw"]
+    return ((u.get("projekty") or {}).get(projekt or "") or {}).get("motyw") or u["motyw"]
+
+
+def panel_dla(u: dict, projekt: str | None) -> str:
+    """Panel warstw po otwarciu: ustawienie projektu, inaczej ogólne — "open" / "closed" (umowa rdzenia)."""
+    p = ((u.get("projekty") or {}).get(projekt or "") or {}).get("panel_warstw") or u.get("panel_warstw") or "otwarty"
+    return "closed" if p == "zamkniety" else "open"
 
 
 async def theme(project: str | None = None) -> dict:
     u = await _ustawienia()
     v = u["wersja"]
-    out = {"css": f"{BAZA}/motyw.css?m={motyw_dla(u, project)}&v={v}"}
+    out = {"css": f"{BAZA}/motyw.css?m={motyw_dla(u, project)}&v={v}", "layers_panel": panel_dla(u, project)}
     if u.get("nazwa"):
         out["title"] = u["nazwa"]
     if u.get("logo"):
@@ -142,6 +148,7 @@ class Ustawienia(BaseModel):
     nazwa: str = Field("", max_length=80)
     pokaz_nazwe: bool = True
     logo_wysokosc: int = Field(32, ge=16, le=64)
+    panel_warstw: str = Field("otwarty", pattern="^(otwarty|zamkniety)$")
 
 
 @router.put("/ustawienia")
@@ -150,8 +157,9 @@ async def zapisz_ustawienia(body: Ustawienia, user: CurrentUser = Depends(KONFIG
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Nie ma takiego motywu")
     async with portal_conn() as conn:
         await conn.execute(
-            "UPDATE wyglad.ustawienia SET motyw = %s, tryb = %s, nazwa = %s, pokaz_nazwe = %s, logo_wysokosc = %s",
-            (body.motyw, body.tryb, body.nazwa.strip(), body.pokaz_nazwe, body.logo_wysokosc))
+            """UPDATE wyglad.ustawienia SET motyw = %s, tryb = %s, nazwa = %s, pokaz_nazwe = %s, logo_wysokosc = %s,
+                      panel_warstw = %s""",
+            (body.motyw, body.tryb, body.nazwa.strip(), body.pokaz_nazwe, body.logo_wysokosc, body.panel_warstw))
         await _zmiana(conn, user)
     _zapomnij()
     return await konfiguracja(user)
@@ -211,7 +219,8 @@ async def usun_motyw(mid: str, user: CurrentUser = Depends(KONFIG)):
         if cur.rowcount == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie ma takiego motywu")
         await conn.execute("UPDATE wyglad.ustawienia SET motyw = 'sophia' WHERE motyw = %s", (mid,))
-        await conn.execute("DELETE FROM wyglad.projekt WHERE motyw = %s", (mid,))
+        await conn.execute("DELETE FROM wyglad.projekt WHERE motyw = %s AND panel_warstw IS NULL", (mid,))
+        await conn.execute("UPDATE wyglad.projekt SET motyw = NULL WHERE motyw = %s", (mid,))
         await _zmiana(conn, user)
     _zapomnij()
     return await konfiguracja(user)
@@ -221,30 +230,32 @@ async def usun_motyw(mid: str, user: CurrentUser = Depends(KONFIG)):
 
 @router.get("/projekty")
 async def projekty(user: CurrentUser = Depends(KONFIG)):
-    """Wszystkie projekty Sophii z przypisanym motywem (None — motyw ogólny)."""
+    """Wszystkie projekty Sophii z motywem i panelem warstw (None — ustawienie ogólne)."""
     async with portal_conn() as conn:
         return await (await conn.execute(
-            """SELECT p.slug, p.title, w.motyw, w.zmieniono, w.zmienil
+            """SELECT p.slug, p.title, w.motyw, w.panel_warstw, w.zmieniono, w.zmienil
                  FROM portal.projects p LEFT JOIN wyglad.projekt w ON w.projekt = p.slug
                 ORDER BY p.sort_order, p.title""")).fetchall()
 
 
-class MotywProjektu(BaseModel):
+class UstawieniaProjektu(BaseModel):
     motyw: str | None = None
+    panel_warstw: str | None = Field(None, pattern="^(otwarty|zamkniety)$")
 
 
 @router.put("/projekty/{slug}")
-async def przypisz_motyw(slug: str, body: MotywProjektu, user: CurrentUser = Depends(KONFIG)):
+async def ustaw_projekt(slug: str, body: UstawieniaProjektu, user: CurrentUser = Depends(KONFIG)):
     if body.motyw and await _motyw(body.motyw) is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Nie ma takiego motywu")
     async with portal_conn() as conn:
         if not await (await conn.execute("SELECT 1 FROM portal.projects WHERE slug = %s", (slug,))).fetchone():
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie ma takiego projektu")
-        if body.motyw:
+        if body.motyw or body.panel_warstw:
             await conn.execute(
-                """INSERT INTO wyglad.projekt (projekt, motyw, zmienil) VALUES (%s, %s, %s)
-                   ON CONFLICT (projekt) DO UPDATE SET motyw = EXCLUDED.motyw, zmieniono = now(), zmienil = EXCLUDED.zmienil""",
-                (slug, body.motyw, user.login))
+                """INSERT INTO wyglad.projekt (projekt, motyw, panel_warstw, zmienil) VALUES (%s, %s, %s, %s)
+                   ON CONFLICT (projekt) DO UPDATE SET motyw = EXCLUDED.motyw, panel_warstw = EXCLUDED.panel_warstw,
+                          zmieniono = now(), zmienil = EXCLUDED.zmienil""",
+                (slug, body.motyw or None, body.panel_warstw, user.login))
         else:
             await conn.execute("DELETE FROM wyglad.projekt WHERE projekt = %s", (slug,))
         await _zmiana(conn, user)

@@ -3,7 +3,7 @@ import io
 
 import pytest
 from PIL import Image
-from sophia_plugin_wyglad import motyw_dla, przygotuj_logo, rodzaj_obrazka
+from sophia_plugin_wyglad import motyw_dla, panel_dla, przygotuj_logo, rodzaj_obrazka
 from sophia_plugin_wyglad.motywy import IDS, WBUDOWANE, buduj_css, sprawdz_css, sprawdz_zmienne
 
 
@@ -45,10 +45,12 @@ def test_buduj_css_tryby():
     assert ".brand-name" not in buduj_css(m, {"logo": "logo.png", "pokaz_nazwe": True})
 
 
-def test_motyw_projektu():
-    u = {"motyw": "sophia", "projekty": {"lasy-dev": "lasy"}}
-    assert motyw_dla(u, "lasy-dev") == "lasy"
-    assert motyw_dla(u, "inny") == "sophia" and motyw_dla(u, None) == "sophia"
+def test_motyw_i_panel_projektu():
+    u = {"motyw": "sophia", "panel_warstw": "otwarty",
+         "projekty": {"lasy-dev": {"motyw": "lasy", "panel_warstw": None}, "mapa": {"motyw": None, "panel_warstw": "zamkniety"}}}
+    assert motyw_dla(u, "lasy-dev") == "lasy" and panel_dla(u, "lasy-dev") == "open"
+    assert motyw_dla(u, "mapa") == "sophia" and panel_dla(u, "mapa") == "closed"
+    assert motyw_dla(u, None) == "sophia" and panel_dla({**u, "panel_warstw": "zamkniety"}, None) == "closed"
 
 
 def _obraz(fmt: str, size=(300, 100)) -> bytes:

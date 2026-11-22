@@ -39,7 +39,7 @@ export function register(host) {
     const pierwszy = () => { const w = wynik && wynik.wyniki.find((x) => x.obiekty && x.obiekty.length); if (w) pokaz(w, w.obiekty[0]); };
     const razem = wynik ? wynik.wyniki.reduce((n, w) => n + (w.obiekty ? w.obiekty.length : 0), 0) : 0;
     return h("div", { style: { display: "flex", flexDirection: "column", height: "100%" } },
-      h("input", { ref: input, value: q, placeholder: "Szukaj w projekcie (np. numer działki, znak sprawy, nazwa)…",
+      h("input", { ref: input, value: q, placeholder: "Szukaj w projekcie, np. miejscowość, działka, decyzja…",
         style: { width: "100%", boxSizing: "border-box", marginBottom: 6 },
         onChange: (e) => setQ(e.target.value), onKeyDown: (e) => { if (e.key === "Enter") pierwszy(); } }),
       error && h("div", { className: "error", onClick: () => setError(null) }, error),
@@ -127,7 +127,7 @@ export function register(host) {
     const szukaj = () => host.openWindow("szukaj", { props: { q: q.trim(), n: Date.now() } });
     return h("form", { className: "toolbar-field", role: "search", onSubmit: (e) => { e.preventDefault(); szukaj(); } },
       h("label", { htmlFor: "wyszukiwarka-pole" }, "Szukaj"),
-      h("input", { id: "wyszukiwarka-pole", type: "search", value: q, placeholder: "działka, znak sprawy, nazwa…",
+      h("input", { id: "wyszukiwarka-pole", type: "search", value: q, placeholder: "np. miejscowość, działka, decyzja…",
         onChange: (e) => setQ(e.target.value) }),
       h("button", { type: "submit", title: "Szukaj w projekcie", "aria-label": "Szukaj" }, h(IkonaLupy)));
   }

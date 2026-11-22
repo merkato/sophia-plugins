@@ -6,6 +6,7 @@ export function register(host) {
   const h = React.createElement;
   const { useEffect, useState, useCallback } = React;
 
+  const PANEL = [["otwarty", "Otwarty"], ["zamkniety", "Zamknięty"]];
   const TRYBY = [["auto", "Automatycznie (jak w systemie)"], ["jasny", "Zawsze jasny"], ["ciemny", "Zawsze ciemny"]];
   const odswiezWyglad = () => window.dispatchEvent(new Event("sophia-theme"));
   const hex6 = (v) => {
@@ -109,7 +110,7 @@ export function register(host) {
     const przyjmij = useCallback((d, zmiana) => {
       setDane(d);
       const u = d.ustawienia;
-      setForm({ nazwa: u.nazwa, pokaz_nazwe: u.pokaz_nazwe, logo_wysokosc: u.logo_wysokosc, tryb: u.tryb });
+      setForm({ nazwa: u.nazwa, pokaz_nazwe: u.pokaz_nazwe, logo_wysokosc: u.logo_wysokosc, tryb: u.tryb, panel_warstw: u.panel_warstw || "otwarty" });
       if (zmiana) odswiezWyglad();
     }, []);
     useEffect(() => { host.api("/konfiguracja").then((d) => przyjmij(d, false)).catch((e) => setError(e.message)); }, []);
@@ -164,6 +165,9 @@ export function register(host) {
       h(Pole, { etykieta: "Tryb jasny / ciemny" },
         h("select", { value: form.tryb, disabled: busy, onChange: (e) => { setForm({ ...form, tryb: e.target.value }); zapiszUstawienia({ tryb: e.target.value }); } },
           TRYBY.map(([k, t]) => h("option", { key: k, value: k }, t)))),
+      h(Pole, { etykieta: "Panel warstw po otwarciu mapy i projektu", opis: "Użytkownik może go potem przełączyć; na telefonie panel jest zawsze zamknięty. Projekt może mieć własne ustawienie (zakładka „Projekty”)." },
+        h("select", { value: form.panel_warstw, disabled: busy, onChange: (e) => { setForm({ ...form, panel_warstw: e.target.value }); zapiszUstawienia({ panel_warstw: e.target.value }); } },
+          PANEL.map(([k, t]) => h("option", { key: k, value: k }, t)))),
 
       edytowany && h(Edytor, { key: edytowany.id, motyw: edytowany, zmienne: dane.zmienne,
         onZapisz: (s) => wykonaj(() => host.api(`/motywy/${encodeURIComponent(edytowany.id)}`, json("PUT", s)), "Motyw zapisany").then(() => setEdytuj(null)),
@@ -211,38 +215,45 @@ export function register(host) {
     const [lista, setLista] = useState(null);
     const [motywy, setMotywy] = useState([]);
     const [ogolny, setOgolny] = useState(null);
+    const [panelOgolny, setPanelOgolny] = useState("otwarty");
     const [busy, setBusy] = useState(null);       // slug zapisywanego projektu
     const [error, setError] = useState(null);
     useEffect(() => {
       Promise.all([host.api("/projekty"), host.api("/konfiguracja")])
-        .then(([p, k]) => { setLista(p); setMotywy(k.motywy); setOgolny(k.motywy.find((m) => m.id === k.ustawienia.motyw) || null); })
+        .then(([p, k]) => { setLista(p); setMotywy(k.motywy); setOgolny(k.motywy.find((m) => m.id === k.ustawienia.motyw) || null);
+          setPanelOgolny(k.ustawienia.panel_warstw || "otwarty"); })
         .catch((e) => setError(e.message));
     }, []);
-    const przypisz = async (p, motyw) => {
+    const przypisz = async (p, zmiana) => {
+      const body = { motyw: p.motyw || null, panel_warstw: p.panel_warstw || null, ...zmiana };
       setBusy(p.slug); setError(null);
       try {
         setLista(await host.api(`/projekty/${encodeURIComponent(p.slug)}`, { method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ motyw: motyw || null }) }));
+          body: JSON.stringify(body) }));
         odswiezWyglad();
-        host.notify(`${p.title}: ${motyw ? motywy.find((m) => m.id === motyw).nazwa : "motyw ogólny"}`);
+        host.notify(`${p.title}: zapisano`);
       } catch (e) { setError(e.message); } finally { setBusy(null); }
     };
     if (error && !lista) return h("div", { className: "error" }, error);
     if (!lista) return h("p", { className: "muted" }, "Wczytywanie…");
     return h("div", null,
-      h("p", { className: "muted" }, "Projekt z przypisanym motywem wygląda inaczej, gdy jest otwarty w mapie. Logo i nazwa aplikacji są wspólne."),
+      h("p", { className: "muted" }, "Ustawienia projektu obowiązują, gdy jest otwarty w mapie; „ogólny” — jak w zakładce „Ogólne”. Logo i nazwa aplikacji są wspólne."),
       error && h("div", { className: "error", onClick: () => setError(null) }, error),
       lista.length === 0 ? h("p", { className: "muted" }, "Brak projektów.") :
-      h("table", { className: "grid", style: { borderCollapse: "collapse", minWidth: 520 } },
-        h("thead", null, h("tr", null, ["Projekt", "Motyw", ""].map((t, i) => h("th", { key: i, style: { textAlign: "left", padding: "6px 10px", borderBottom: "1px solid var(--line)" } }, t)))),
+      h("table", { className: "grid", style: { borderCollapse: "collapse", minWidth: 640 } },
+        h("thead", null, h("tr", null, ["Projekt", "Motyw", "Panel warstw", ""].map((t, i) => h("th", { key: i, style: { textAlign: "left", padding: "6px 10px", borderBottom: "1px solid var(--line)" } }, t)))),
         h("tbody", null, lista.map((p) => {
           const m = p.motyw ? motywy.find((x) => x.id === p.motyw) : null;
           return h("tr", { key: p.slug },
             h("td", { style: { padding: "6px 10px", borderBottom: "1px solid var(--line)" } }, h("strong", null, p.title), h("div", { className: "muted" }, p.slug)),
             h("td", { style: { padding: "6px 10px", borderBottom: "1px solid var(--line)" } },
-              h("select", { value: p.motyw || "", disabled: busy === p.slug, onChange: (e) => przypisz(p, e.target.value), style: { minWidth: 240 } },
+              h("select", { value: p.motyw || "", disabled: busy === p.slug, onChange: (e) => przypisz(p, { motyw: e.target.value || null }), style: { minWidth: 240 } },
                 h("option", { value: "" }, `— ogólny${ogolny ? ` (${ogolny.nazwa})` : ""} —`),
                 motywy.map((x) => h("option", { key: x.id, value: x.id }, x.nazwa)))),
+            h("td", { style: { padding: "6px 10px", borderBottom: "1px solid var(--line)" } },
+              h("select", { value: p.panel_warstw || "", disabled: busy === p.slug, onChange: (e) => przypisz(p, { panel_warstw: e.target.value || null }) },
+                h("option", { value: "" }, `— ogólny (${panelOgolny === "zamkniety" ? "zamknięty" : "otwarty"}) —`),
+                PANEL.map(([k, t]) => h("option", { key: k, value: k }, t)))),
             h("td", { style: { padding: "6px 10px", borderBottom: "1px solid var(--line)", width: 120 } },
               h(Miniatura, { z: (m || ogolny || { jasny: {} }).jasny })));
         }))));

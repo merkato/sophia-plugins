@@ -2,7 +2,7 @@
   "id": "wyglad",
   "name": "Wygląd",
   "version": "1.0.1",
-  "description": "Skórki interfejsu Sophii: gotowe motywy (Sophia, Grafit, Lasy Państwowe), własne motywy z edytorem kolorów (tryb jasny i ciemny), osobny motyw dla projektu, nazwa aplikacji (wyłączalna) i logo w górnym pasku (PNG albo WEBP), ikona karty przeglądarki.",
+  "description": "Skórki interfejsu Sophii: gotowe motywy (Sophia, Grafit, Lasy Państwowe), własne motywy z edytorem kolorów (tryb jasny i ciemny), osobny motyw i stan panelu warstw dla projektu, nazwa aplikacji (wyłączalna) i logo w górnym pasku (PNG albo WEBP), ikona karty przeglądarki.",
   "sophia": ">=0.8.1",
   "requires": {},
   "capabilities": [
