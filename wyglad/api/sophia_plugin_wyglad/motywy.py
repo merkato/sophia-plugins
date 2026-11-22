@@ -111,7 +111,7 @@ def _blok(zmienne: dict, schemat: str) -> str:
 
 def buduj_css(motyw: dict, ustawienia: dict) -> str:
     """Arkusz dołączany po stylach rdzenia: zmienne trybu jasnego / ciemnego wg ustawienia `tryb`
-    (auto — za ustawieniem systemu; motyw bez wersji ciemnej — zawsze jasny), wysokość logo, nazwa obok logo,
+    (auto — za ustawieniem systemu; motyw bez wersji ciemnej — zawsze jasny), wysokość logo, nazwa w pasku (wyłączalna),
     dodatkowy CSS motywu."""
     jasny, ciemny = motyw.get("jasny") or {}, motyw.get("ciemny") or {}
     tryb = ustawienia.get("tryb") or "auto"
@@ -123,7 +123,7 @@ def buduj_css(motyw: dict, ustawienia: dict) -> str:
         if tryb == "auto" and ciemny:
             czesci.append("@media (prefers-color-scheme: dark) {\n" + _blok(ciemny, "dark") + "\n}")
     czesci.append(f":root {{ --brand-logo-height: {int(ustawienia.get('logo_wysokosc') or 32)}px; }}")
-    if ustawienia.get("logo") and not ustawienia.get("pokaz_nazwe", True):
+    if not ustawienia.get("pokaz_nazwe", True):
         czesci.append(".brand-name { display: none; }")
     if motyw.get("css"):
         czesci.append("/* dodatkowy CSS motywu */\n" + motyw["css"])

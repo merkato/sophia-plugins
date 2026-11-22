@@ -1,15 +1,17 @@
 """Wtyczka „Wygląd”: motywy interfejsu (zmienne CSS rdzenia), nazwa aplikacji, logo i ikona karty.
 
-Rdzeń Sophii (≥ 0.8) pyta o wygląd funkcją `theme()` bez logowania — dotyczy też ekranu logowania — więc arkusz,
-logo i ikona są dostępne publicznie. Zmiany: uprawnienie `wyglad.konfiguracja`.
+Rdzeń Sophii (≥ 0.8.1) pyta o wygląd funkcją `theme(project)` bez logowania — dotyczy też ekranu logowania — więc arkusz,
+logo i ikona są dostępne publicznie. Projekt może mieć własny motyw (zamiast ogólnego).
+Zmiany: uprawnienie `wyglad.konfiguracja`.
 
 Endpointy pod /api/plugins/wyglad/…:
-  GET  /motyw.css, /logo, /ikona.png  — publiczne (adresy z wersją, długa pamięć podręczna)
+  GET  /motyw.css?m=, /logo, /ikona.png — publiczne (adresy z wersją, długa pamięć podręczna)
   GET  /konfiguracja                   — ustawienia, motywy (wbudowane i własne), lista zmiennych
   PUT  /ustawienia                     — motyw, tryb, nazwa aplikacji, nazwa obok logo, wysokość logo
   POST /motywy {nazwa, z}              — nowy motyw własny (kopia istniejącego)
   PUT  /motywy/{id}; DELETE            — edycja / usunięcie motywu własnego
   POST /logo (PNG albo WEBP); DELETE /logo
+  GET  /projekty; PUT /projekty/{slug} {motyw | null} — motywy przypisane do projektów
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
@@ -51,8 +53,10 @@ async def _ustawienia(swieze: bool = False) -> dict:
         u = await (await conn.execute(
             """SELECT motyw, tryb, nazwa, pokaz_nazwe, logo, logo_wysokosc, wersja, zmieniono, zmienil
                  FROM wyglad.ustawienia""")).fetchone()
+        projekty = await (await conn.execute("SELECT projekt, motyw FROM wyglad.projekt")).fetchall()
     u = dict(u) if u else {"motyw": "sophia", "tryb": "auto", "nazwa": "", "pokaz_nazwe": True, "logo": None,
                            "logo_wysokosc": 32, "wersja": 1}
+    u["projekty"] = {r["projekt"]: r["motyw"] for r in projekty}
     _PAMIEC.update(t=time.monotonic(), u=u)
     return u
 
@@ -76,10 +80,15 @@ async def _zmiana(conn, user: CurrentUser) -> None:
 
 # ---------------------------------------------------------------------------- dla rdzenia i publiczne pliki
 
-async def theme() -> dict:
+def motyw_dla(u: dict, projekt: str | None) -> str:
+    """Motyw projektu (jeśli przypisany), inaczej ogólny."""
+    return (u.get("projekty") or {}).get(projekt or "") or u["motyw"]
+
+
+async def theme(project: str | None = None) -> dict:
     u = await _ustawienia()
     v = u["wersja"]
-    out = {"css": f"{BAZA}/motyw.css?v={v}"}
+    out = {"css": f"{BAZA}/motyw.css?m={motyw_dla(u, project)}&v={v}"}
     if u.get("nazwa"):
         out["title"] = u["nazwa"]
     if u.get("logo"):
@@ -89,9 +98,9 @@ async def theme() -> dict:
 
 
 @router.get("/motyw.css")
-async def motyw_css():
+async def motyw_css(m: str | None = Query(None, max_length=60)):
     u = await _ustawienia()
-    m = await _motyw(u["motyw"]) or {"id": "sophia", **WBUDOWANE["sophia"]}
+    m = (await _motyw(m) if m else None) or await _motyw(u["motyw"]) or {"id": "sophia", **WBUDOWANE["sophia"]}
     return Response(buduj_css(m, u), media_type="text/css; charset=utf-8",
                     headers={"Cache-Control": "public, max-age=86400"})
 
@@ -122,6 +131,7 @@ async def konfiguracja(user: CurrentUser = Depends(KONFIG)):
         wlasne = await (await conn.execute(
             "SELECT id, nazwa, jasny, ciemny, css, zmieniono, zmienil FROM wyglad.motyw ORDER BY nazwa, id")).fetchall()
     motywy = [{"id": k, "wbudowany": True, **v} for k, v in WBUDOWANE.items()] + [{**m, "wbudowany": False} for m in wlasne]
+    u = {k: v for k, v in u.items() if k != "projekty"}
     return {"ustawienia": {**u, "logo_url": f"{BAZA}/logo?v={u['wersja']}" if u.get("logo") else None},
             "motywy": motywy, "zmienne": ZMIENNE}
 
@@ -201,9 +211,45 @@ async def usun_motyw(mid: str, user: CurrentUser = Depends(KONFIG)):
         if cur.rowcount == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie ma takiego motywu")
         await conn.execute("UPDATE wyglad.ustawienia SET motyw = 'sophia' WHERE motyw = %s", (mid,))
+        await conn.execute("DELETE FROM wyglad.projekt WHERE motyw = %s", (mid,))
         await _zmiana(conn, user)
     _zapomnij()
     return await konfiguracja(user)
+
+
+# ---------------------------------------------------------------------------- motywy projektów
+
+@router.get("/projekty")
+async def projekty(user: CurrentUser = Depends(KONFIG)):
+    """Wszystkie projekty Sophii z przypisanym motywem (None — motyw ogólny)."""
+    async with portal_conn() as conn:
+        return await (await conn.execute(
+            """SELECT p.slug, p.title, w.motyw, w.zmieniono, w.zmienil
+                 FROM portal.projects p LEFT JOIN wyglad.projekt w ON w.projekt = p.slug
+                ORDER BY p.sort_order, p.title""")).fetchall()
+
+
+class MotywProjektu(BaseModel):
+    motyw: str | None = None
+
+
+@router.put("/projekty/{slug}")
+async def przypisz_motyw(slug: str, body: MotywProjektu, user: CurrentUser = Depends(KONFIG)):
+    if body.motyw and await _motyw(body.motyw) is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Nie ma takiego motywu")
+    async with portal_conn() as conn:
+        if not await (await conn.execute("SELECT 1 FROM portal.projects WHERE slug = %s", (slug,))).fetchone():
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie ma takiego projektu")
+        if body.motyw:
+            await conn.execute(
+                """INSERT INTO wyglad.projekt (projekt, motyw, zmienil) VALUES (%s, %s, %s)
+                   ON CONFLICT (projekt) DO UPDATE SET motyw = EXCLUDED.motyw, zmieniono = now(), zmienil = EXCLUDED.zmienil""",
+                (slug, body.motyw, user.login))
+        else:
+            await conn.execute("DELETE FROM wyglad.projekt WHERE projekt = %s", (slug,))
+        await _zmiana(conn, user)
+    _zapomnij()
+    return await projekty(user)
 
 
 # ---------------------------------------------------------------------------- logo

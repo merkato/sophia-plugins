@@ -3,7 +3,7 @@ import io
 
 import pytest
 from PIL import Image
-from sophia_plugin_wyglad import przygotuj_logo, rodzaj_obrazka
+from sophia_plugin_wyglad import motyw_dla, przygotuj_logo, rodzaj_obrazka
 from sophia_plugin_wyglad.motywy import IDS, WBUDOWANE, buduj_css, sprawdz_css, sprawdz_zmienne
 
 
@@ -41,7 +41,14 @@ def test_buduj_css_tryby():
     jasny = buduj_css({**m, "ciemny": {}}, {"tryb": "ciemny"})      # bez wersji ciemnej — zawsze jasny
     assert "#111111" in jasny and "color-scheme: light" in jasny
     assert ".brand-name { display: none; }" in buduj_css(m, {"logo": "logo.png", "pokaz_nazwe": False})
-    assert ".brand-name" not in buduj_css(m, {"logo": None, "pokaz_nazwe": False})   # bez logo nazwa zostaje
+    assert ".brand-name { display: none; }" in buduj_css(m, {"logo": None, "pokaz_nazwe": False})   # także bez logo
+    assert ".brand-name" not in buduj_css(m, {"logo": "logo.png", "pokaz_nazwe": True})
+
+
+def test_motyw_projektu():
+    u = {"motyw": "sophia", "projekty": {"lasy-dev": "lasy"}}
+    assert motyw_dla(u, "lasy-dev") == "lasy"
+    assert motyw_dla(u, "inny") == "sophia" and motyw_dla(u, None) == "sophia"
 
 
 def _obraz(fmt: str, size=(300, 100)) -> bytes:

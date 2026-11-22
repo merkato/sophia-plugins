@@ -99,8 +99,8 @@ export function register(host) {
         h("button", { className: "danger", disabled: busy, onClick: () => { if (confirm(`Usunąć motyw „${motyw.nazwa}”?`)) { ukryjPodglad(); onUsun(); } } }, "Usuń motyw")));
   }
 
-  // ------------------------------------------------------------------ strona „Wygląd”
-  function Wyglad() {
+  // ------------------------------------------------------------------ zakładka „Ogólne”
+  function Ogolne() {
     const [dane, setDane] = useState(null);
     const [form, setForm] = useState(null);         // nazwa, pokaz_nazwe, logo_wysokosc, tryb
     const [edytuj, setEdytuj] = useState(null);     // id motywu własnego w edycji
@@ -140,12 +140,12 @@ export function register(host) {
     const edytowany = edytuj ? dane.motywy.find((m) => m.id === edytuj && !m.wbudowany) : null;
     const zmienionoForm = form.nazwa !== u.nazwa || form.pokaz_nazwe !== u.pokaz_nazwe || form.logo_wysokosc !== u.logo_wysokosc;
 
-    return h("div", { style: { maxWidth: 1100 } },
-      h("h2", { style: { marginTop: 0 } }, "Wygląd"),
+    return h("div", null,
       error && h("div", { className: "error", onClick: () => setError(null) }, error),
 
       // --- motywy
-      h("h3", null, "Motyw"),
+      h("h3", null, "Motyw ogólny"),
+      h("p", { className: "muted", style: { marginTop: -6 } }, "Obowiązuje wszędzie poza projektami z własnym motywem (zakładka „Projekty”)."),
       h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 } },
         dane.motywy.map((m) => {
           const wybrany = m.id === u.motyw;
@@ -178,7 +178,9 @@ export function register(host) {
             h("input", { value: form.nazwa, maxLength: 80, placeholder: "Sophia", style: { width: "100%" }, onChange: (e) => setForm({ ...form, nazwa: e.target.value }) })),
           h("label", { style: { display: "flex", gap: 6, alignItems: "center", margin: "8px 0" } },
             h("input", { type: "checkbox", checked: form.pokaz_nazwe, onChange: (e) => setForm({ ...form, pokaz_nazwe: e.target.checked }) }),
-            "Pokazuj nazwę obok logo"),
+            "Pokazuj nazwę aplikacji w górnym pasku"),
+          !form.pokaz_nazwe && h("div", { className: "muted", style: { marginTop: -4 } },
+            "W pasku tylko logo (bez logo — pusto). Wpisana nazwa zostaje tytułem karty przeglądarki; pusta — „Sophia”."),
           h(Pole, { etykieta: `Wysokość logo: ${form.logo_wysokosc} px` },
             h("input", { type: "range", min: 16, max: 64, step: 2, value: form.logo_wysokosc, style: { width: 240 },
               onChange: (e) => setForm({ ...form, logo_wysokosc: Number(e.target.value) }) })),
@@ -191,7 +193,7 @@ export function register(host) {
             border: "1px solid var(--line)", minHeight: 48 } },
             u.logo_url ? h("img", { src: u.logo_url, alt: "Logo", style: { height: form.logo_wysokosc, width: "auto", maxWidth: 240, objectFit: "contain" } })
               : h("span", { className: "muted", style: { color: "inherit", opacity: 0.7 } }, "brak logo"),
-            (!u.logo_url || form.pokaz_nazwe) && h("strong", { style: { fontSize: 16 } }, form.nazwa || "Sophia")),
+            form.pokaz_nazwe && h("strong", { style: { fontSize: 16 } }, form.nazwa || "Sophia")),
           h("div", { style: { display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" } },
             h("label", { className: "button", style: { opacity: busy ? 0.5 : 1 } }, u.logo_url ? "Zmień logo…" : "Wgraj logo…",
               h("input", { type: "file", accept: "image/png,image/webp", disabled: busy, style: { display: "none" },
@@ -202,6 +204,59 @@ export function register(host) {
       h("p", { className: "muted", style: { marginTop: 24 } },
         `Ostatnia zmiana: ${u.zmieniono ? new Date(u.zmieniono).toLocaleString("pl-PL") : "—"}${u.zmienil ? ` (${u.zmienil})` : ""}. ` +
         "Wygląd obowiązuje wszystkich użytkowników, także na ekranie logowania."));
+  }
+
+  // ------------------------------------------------------------------ zakładka „Projekty”: motyw dla projektu
+  function Projekty() {
+    const [lista, setLista] = useState(null);
+    const [motywy, setMotywy] = useState([]);
+    const [ogolny, setOgolny] = useState(null);
+    const [busy, setBusy] = useState(null);       // slug zapisywanego projektu
+    const [error, setError] = useState(null);
+    useEffect(() => {
+      Promise.all([host.api("/projekty"), host.api("/konfiguracja")])
+        .then(([p, k]) => { setLista(p); setMotywy(k.motywy); setOgolny(k.motywy.find((m) => m.id === k.ustawienia.motyw) || null); })
+        .catch((e) => setError(e.message));
+    }, []);
+    const przypisz = async (p, motyw) => {
+      setBusy(p.slug); setError(null);
+      try {
+        setLista(await host.api(`/projekty/${encodeURIComponent(p.slug)}`, { method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ motyw: motyw || null }) }));
+        odswiezWyglad();
+        host.notify(`${p.title}: ${motyw ? motywy.find((m) => m.id === motyw).nazwa : "motyw ogólny"}`);
+      } catch (e) { setError(e.message); } finally { setBusy(null); }
+    };
+    if (error && !lista) return h("div", { className: "error" }, error);
+    if (!lista) return h("p", { className: "muted" }, "Wczytywanie…");
+    return h("div", null,
+      h("p", { className: "muted" }, "Projekt z przypisanym motywem wygląda inaczej, gdy jest otwarty w mapie. Logo i nazwa aplikacji są wspólne."),
+      error && h("div", { className: "error", onClick: () => setError(null) }, error),
+      lista.length === 0 ? h("p", { className: "muted" }, "Brak projektów.") :
+      h("table", { className: "grid", style: { borderCollapse: "collapse", minWidth: 520 } },
+        h("thead", null, h("tr", null, ["Projekt", "Motyw", ""].map((t, i) => h("th", { key: i, style: { textAlign: "left", padding: "6px 10px", borderBottom: "1px solid var(--line)" } }, t)))),
+        h("tbody", null, lista.map((p) => {
+          const m = p.motyw ? motywy.find((x) => x.id === p.motyw) : null;
+          return h("tr", { key: p.slug },
+            h("td", { style: { padding: "6px 10px", borderBottom: "1px solid var(--line)" } }, h("strong", null, p.title), h("div", { className: "muted" }, p.slug)),
+            h("td", { style: { padding: "6px 10px", borderBottom: "1px solid var(--line)" } },
+              h("select", { value: p.motyw || "", disabled: busy === p.slug, onChange: (e) => przypisz(p, e.target.value), style: { minWidth: 240 } },
+                h("option", { value: "" }, `— ogólny${ogolny ? ` (${ogolny.nazwa})` : ""} —`),
+                motywy.map((x) => h("option", { key: x.id, value: x.id }, x.nazwa)))),
+            h("td", { style: { padding: "6px 10px", borderBottom: "1px solid var(--line)", width: 120 } },
+              h(Miniatura, { z: (m || ogolny || { jasny: {} }).jasny })));
+        }))));
+  }
+
+  // ------------------------------------------------------------------ strona „Wygląd”
+  function Wyglad() {
+    const [zakladka, setZakladka] = useState("ogolne");
+    return h("div", { style: { maxWidth: 1100 } },
+      h("h2", { style: { marginTop: 0 } }, "Wygląd"),
+      h("div", { style: { display: "flex", gap: 6, marginBottom: 12 } },
+        [["ogolne", "Ogólne"], ["projekty", "Projekty"]].map(([k, t]) =>
+          h("button", { key: k, className: zakladka === k ? "active" : undefined, onClick: () => setZakladka(k) }, t))),
+      zakladka === "ogolne" ? h(Ogolne) : h(Projekty));
   }
 
   return { pages: { wyglad: Wyglad } };
