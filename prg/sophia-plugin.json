@@ -1,0 +1,40 @@
+{
+  "id": "prg",
+  "name": "PRG — granice z Państwowego Rejestru Granic",
+  "version": "1.0.0",
+  "description": "Obręby ewidencyjne i nadleśnictwa z Państwowego Rejestru Granic (usługa WFS GUGiK albo paczka SHP) w schemacie prg: podgląd zmian przed zapisem, kontrola duplikatów, stan bieżący i historia wersji; porównanie z granicami z innego źródła (np. danymi Lasów Państwowych) z warstwą rozbieżności.",
+  "sophia": ">=0.8",
+  "requires": {},
+  "capabilities": [
+    {"id": "prg.podglad", "title": "Przeglądanie rejestru PRG i porównań"},
+    {"id": "prg.import", "title": "Import danych PRG i uruchamianie porównań"}
+  ],
+  "settings": [
+    {"id": "projekt", "title": "Projekt mapy", "type": "project",
+     "description": "Projekt, w którym „Pokaż na mapie” pokazuje obiekty i rozbieżności."},
+    {"id": "nadlesnictwa_tabela", "title": "Porównanie nadleśnictw — tabela", "type": "text",
+     "description": "Tabela z granicami nadleśnictw z innego źródła, np. lasy.nadlesnictwa (schemat.tabela, z geometrią)."},
+    {"id": "nadlesnictwa_pole_kodu", "title": "Porównanie nadleśnictw — pole kodu", "type": "text",
+     "description": "Pole z kodem nadleśnictwa (porównywane same cyfry: 17-02 = n1702 = 1702). Puste — parowanie po położeniu."},
+    {"id": "nadlesnictwa_pole_nazwy", "title": "Porównanie nadleśnictw — pole nazwy", "type": "text",
+     "description": "Pole z nazwą (opcjonalnie, do wyników)."},
+    {"id": "obreby_tabela", "title": "Porównanie obrębów — tabela", "type": "text",
+     "description": "Tabela z granicami obrębów ewidencyjnych z innego źródła (schemat.tabela, z geometrią)."},
+    {"id": "obreby_pole_kodu", "title": "Porównanie obrębów — pole kodu", "type": "text",
+     "description": "Pole z identyfikatorem obrębu TERYT, np. 146502_8.1217. Puste — parowanie po położeniu."},
+    {"id": "obreby_pole_nazwy", "title": "Porównanie obrębów — pole nazwy", "type": "text",
+     "description": "Pole z nazwą obrębu (opcjonalnie)."},
+    {"id": "tolerancja_m", "title": "Tolerancja porównania (m)", "type": "text",
+     "description": "Rozbieżności węższe niż ta wartość nie są pokazywane jako osobne obszary (domyślnie 1 m)."}
+  ],
+  "api": {"package": "sophia_plugin_prg"},
+  "web": {
+    "entry": "web/index.js",
+    "menu": "PRG",
+    "pages": [
+      {"id": "importy", "title": "Import", "capability": "prg.import"},
+      {"id": "rejestr", "title": "Rejestr", "capability": "prg.podglad"},
+      {"id": "porownanie", "title": "Porównanie", "capability": "prg.podglad"}
+    ]
+  }
+}

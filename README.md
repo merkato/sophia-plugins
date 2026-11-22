@@ -7,6 +7,7 @@ z manifestem `sophia-plugin.json`. Opis systemu wtyczek, manifestu, API i interf
 | Wtyczka | Opis |
 |---|---|
 | [`egib`](egib/) | Import danych EGiB (GML wg rozporządzenia 2021) z wersjonowaniem: działki, użytki gruntowe, obręby, jednostki, punkty graniczne, zmiany; rejestr ze stanem bieżącym i historią; raport zmian dla listy działek |
+| [`prg`](prg/) | Granice z Państwowego Rejestru Granic (obręby ewidencyjne, nadleśnictwa) z usługi WFS GUGiK albo paczki SHP: podgląd zmian, kontrola duplikatów, stan bieżący i historia; porównanie z granicami z innego źródła z warstwą rozbieżności |
 | [`wyszukiwarka`](wyszukiwarka/) | Okno „Szukaj” nad mapą: wyszukiwanie w warstwach i polach wskazanych dla projektu; użytkownik znajduje tylko to, co może zobaczyć (prawa warstw, filtr warstwy, zakres danych) |
 | [`eksport`](eksport/) | Pobieranie danych do XLSX, CSV, GeoPackage i paczki SHP (mLas): warstwy projektu (cały zakres albo bieżący widok mapy) i zestawienia innych wtyczek; zakres danych użytkownika, dziennik pobrań |
 | [`wyglad`](wyglad/) | Skórki interfejsu: motywy Sophia, Grafit i Lasy Państwowe, własne motywy z edytorem kolorów (jasny i ciemny), osobny motyw dla projektu, wyłączalna nazwa aplikacji, logo PNG/WEBP w górnym pasku i ikona karty |
