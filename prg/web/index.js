@@ -16,9 +16,90 @@ export function register(host) {
   const fmtDate = (d) => (d ? new Date(d).toLocaleString("pl-PL") : "—");
   const fmtDay = (d) => (d ? new Date(d).toLocaleDateString("pl-PL") : "—");
   const mb = (b) => `${(b / 1048576).toFixed(1)} MB`;
-  const lines = (t) => t.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
   const num = (v, d = 2) => (v == null ? "—" : Number(v).toLocaleString("pl-PL", { maximumFractionDigits: d }));
   const obszarTxt = (o) => (o && o.length ? o.join(", ") : "cały kraj");
+
+  // ------------------------------------------------------------------ wybór obszaru po nazwie
+  // Słownik jednostek z usługi PRG (pobierany w tle przy pierwszym użyciu); wspólny dla stron wtyczki.
+  let slownikCache = null;
+  function useObszary(onError) {
+    const [data, setData] = useState(slownikCache);
+    useEffect(() => {
+      if (slownikCache && slownikCache.stan.status === "gotowy") return undefined;
+      let timer;
+      const tick = () => host.api("/obszary").then((d) => {
+        slownikCache = d; setData(d);
+        if (d.stan.status === "pobieranie") timer = setTimeout(tick, 3000);
+      }).catch((e) => onError(e.message));
+      tick();
+      return () => clearTimeout(timer);
+    }, []);
+    const refresh = async () => {
+      try { await host.api("/obszary/odswiez", { method: "POST" }); slownikCache = null; setData(null);
+        const d = await host.api("/obszary"); slownikCache = d; setData(d); } catch (e) { onError(e.message); }
+    };
+    return [data, refresh];
+  }
+
+  const POZIOM = { wojewodztwo: "Województwo", powiat: "Powiat", jednostka_ew: "Jednostka ewidencyjna (gmina, dzielnica)",
+    rdlp: "RDLP", nadlesnictwo: "Nadleśnictwo" };
+  const CALE = { wojewodztwo: "— cały kraj —", powiat: "— całe województwo —", jednostka_ew: "— cały powiat —",
+    rdlp: "— cały kraj —", nadlesnictwo: "— całe RDLP —" };
+
+  /** Obszar = lista kodów (początków kodów obiektów); pusta = cały kraj. */
+  function WyborObszaru({ rodzaj, value, onChange, onError }) {
+    const [data, refresh] = useObszary(onError);
+    const [sel, setSel] = useState({});
+    const [reczny, setReczny] = useState("");
+    useEffect(() => { setSel({}); }, [rodzaj]);
+    if (!data) return h("p", { className: "muted" }, "Wczytywanie listy jednostek…");
+    const poziomy = data.poziomy[rodzaj] || [];
+    const nazwy = {};
+    for (const p of poziomy) for (const [k, n] of data.jednostki[p] || []) nazwy[k] = n;
+    const pusto = poziomy.some((p) => !(data.jednostki[p] || []).length);
+    const add = (kod) => {
+      if (!kod) return;
+      if (value.some((v) => kod.startsWith(v))) { onError(`${nazwy[kod] || kod}: już w obszarze`); return; }
+      onChange([...value.filter((v) => !v.startsWith(kod)), kod].sort());
+    };
+    // kaskada: każdy poziom pokazuje jednostki zaczynające się od kodu wybranego wyżej
+    let rodzic = "";
+    const selects = poziomy.map((p) => {
+      const pref = rodzic && (p === "nadlesnictwo" ? `${rodzic}-` : rodzic);
+      const lista = (data.jednostki[p] || []).filter(([k]) => !rodzic || k.startsWith(pref));
+      const disabled = rodzic === null;
+      const el = h("label", { key: p, className: "field" }, h("span", null, POZIOM[p]),
+        h("select", { value: sel[p] || "", disabled, onChange: (e) => {
+          const next = {};
+          for (const q of poziomy) { if (q === p) break; next[q] = sel[q]; }
+          next[p] = e.target.value;
+          setSel(next);
+        } },
+          h("option", { value: "" }, CALE[p]),
+          lista.map(([k, n]) => h("option", { key: k, value: k }, `${n} (${k})`))));
+      rodzic = sel[p] || null;
+      return el;
+    });
+    const wybrany = [...poziomy].reverse().map((p) => sel[p]).find(Boolean);
+    return h("div", { className: "prg-obszar" },
+      data.stan.status === "pobieranie" && h("div", { className: "notice" },
+        `Pobieranie listy jednostek z usługi PRG (jednorazowo, kilka minut)… ${data.stan.postep || ""}`),
+      data.stan.status === "blad" && h("div", { className: "error" }, data.stan.postep || "Nie udało się pobrać listy jednostek",
+        host.can("prg.import") && h("button", { style: { marginLeft: 8 }, onClick: refresh }, "Spróbuj ponownie")),
+      !pusto && selects,
+      !pusto && h("div", { className: "actions" },
+        h("button", { disabled: !wybrany, onClick: () => { add(wybrany); setSel({}); } }, "Dodaj do obszaru"),
+        h("input", { value: reczny, placeholder: "albo wpisz kod", style: { width: 140 }, onChange: (e) => setReczny(e.target.value),
+          onKeyDown: (e) => { if (e.key === "Enter" && reczny.trim()) { add(reczny.trim()); setReczny(""); } } }),
+        reczny.trim() && h("button", { onClick: () => { add(reczny.trim()); setReczny(""); } }, "Dodaj kod")),
+      h("div", { className: "prg-chips", style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", margin: "6px 0" } }, h("b", null, "Obszar: "),
+        value.length === 0 ? h("span", null, "cały kraj") : value.map((v) => h("span", { key: v, className: "prg-chip", style: { border: "1px solid var(--line)", borderRadius: 12, padding: "1px 8px" } },
+          `${nazwy[v] || "kod"} (${v}) `, h("button", { className: "link", title: "Usuń z obszaru",
+            onClick: () => onChange(value.filter((x) => x !== v)) }, "✕")))),
+      data.stan.pobrano && h("p", { className: "muted" }, `Lista jednostek z PRG z ${fmtDay(data.stan.pobrano)}`,
+        host.can("prg.import") && data.stan.status !== "pobieranie"
+          ? h("button", { className: "link", style: { marginLeft: 6 }, onClick: refresh }, "odśwież") : null));
+  }
 
   function useRodzaje(onError) {
     const [data, setData] = useState(null);
@@ -55,16 +136,15 @@ export function register(host) {
   }
 
   function NowyImport({ rodzaje, onDone, onError }) {
-    const [rodzaj, setRodzaj] = useState("nadlesnictwo");
+    const [rodzaj, setRodzaj] = useState("obreb");
     const [zrodlo, setZrodlo] = useState("wfs");
-    const [obszar, setObszar] = useState("");
+    const [obszar, setObszar] = useState([]);
     const [zakres, setZakres] = useState("pelny");
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(null);
-    const opis = rodzaje && (rodzaje.rodzaje.find((r) => r.id === rodzaj) || {}).obszar_opis;
     const send = async () => {
       try {
-        const body = { rodzaj, zrodlo, obszar: lines(obszar), zakres_typ: zakres };
+        const body = { rodzaj, zrodlo, obszar, zakres_typ: zakres };
         if (zrodlo === "plik") Object.assign(body, { plik: file.name, rozmiar: file.size });
         if (zakres === "pelny" && !body.obszar.length && !window.confirm(
           "Pełny import całego kraju: obiekty rejestru, których nie będzie w źródle, zostaną zamknięte. Kontynuować?")) return;
@@ -88,7 +168,7 @@ export function register(host) {
       h("p", { className: "muted" }, "Dane z Państwowego Rejestru Granic (GUGiK). Przed zapisem w rejestrze zobaczysz, co jest nowe, ",
         "co się zmieniło i co zostanie zamknięte; obiekty bez identyfikatora, kodu albo geometrii i duble trafiają do raportu."),
       h("label", { className: "field" }, h("span", null, "Rodzaj"),
-        h("select", { value: rodzaj, onChange: (e) => setRodzaj(e.target.value) },
+        h("select", { value: rodzaj, onChange: (e) => { setRodzaj(e.target.value); setObszar([]); } },
           Object.entries(RODZAJE).map(([k, v]) => h("option", { key: k, value: k }, v)))),
       h("label", { className: "field" }, h("span", null, "Źródło"),
         h("select", { value: zrodlo, onChange: (e) => setZrodlo(e.target.value) },
@@ -96,9 +176,7 @@ export function register(host) {
           h("option", { value: "plik" }, "plik z paczki PRG (ZIP z SHP albo GML)"))),
       zrodlo === "plik" && h("label", { className: "field" }, h("span", null, "Plik"),
         h("input", { type: "file", accept: ".zip,.gml,.xml", onChange: (e) => setFile(e.target.files[0] || null) })),
-      h("label", { className: "field" }, h("span", null, "Obszar"),
-        h("input", { value: obszar, placeholder: "puste = cały kraj", onChange: (e) => setObszar(e.target.value) })),
-      opis && h("p", { className: "muted" }, `Obszar: ${opis}; kilka wartości rozdziel przecinkami.`),
+      h(WyborObszaru, { rodzaj, value: obszar, onChange: setObszar, onError }),
       h("label", { className: "field" }, h("span", null, "Zakres"),
         h("select", { value: zakres, onChange: (e) => setZakres(e.target.value) },
           h("option", { value: "pelny" }, "pełny — obiekty z obszaru, których nie ma w źródle, zostaną zamknięte"),
@@ -211,7 +289,7 @@ export function register(host) {
     const [error, setError] = useState(null);
     const [rodzaje] = useRodzaje(setError);
     const [rodzaj, setRodzaj] = useState("nadlesnictwo");
-    const [obszar, setObszar] = useState("");
+    const [obszar, setObszar] = useState([]);
     const [busy, setBusy] = useState(false);
     const load = useCallback(() => host.api("/porownania").then((l) => { setList(l); return l; }).catch((e) => setError(e.message)), []);
     useEffect(() => {
@@ -224,7 +302,7 @@ export function register(host) {
     const start = async () => {
       setBusy(true);
       try {
-        const { id } = await host.api("/porownania", { method: "POST", body: JSON.stringify({ rodzaj, obszar: lines(obszar) }) });
+        const { id } = await host.api("/porownania", { method: "POST", body: JSON.stringify({ rodzaj, obszar }) });
         host.notify(`Porównanie #${id} uruchomione`);
         setSel(id); await load();
       } catch (e) { setError(e.message); } finally { setBusy(false); }
@@ -237,12 +315,11 @@ export function register(host) {
           "Wynik: obiekty zgodne, z rozbieżnościami, tylko w PRG, tylko w drugim źródle; obszary rozbieżności szersze niż tolerancja ",
           "są też w widoku prg.v_roznice_ostatnie (warstwa do QGIS)."),
         h("label", { className: "field" }, h("span", null, "Rodzaj"),
-          h("select", { value: rodzaj, onChange: (e) => setRodzaj(e.target.value) },
+          h("select", { value: rodzaj, onChange: (e) => { setRodzaj(e.target.value); setObszar([]); } },
             Object.entries(RODZAJE).map(([k, v]) => h("option", { key: k, value: k }, v)))),
         r && h("p", { className: "muted" }, r.porownanie ? `Porównywana tabela: ${r.porownanie}` : "Brak tabeli do porównania — ustawia ją administrator (Wtyczki → PRG → Ustawienia).",
           ` · w rejestrze PRG: ${r.w_rejestrze}`),
-        h("label", { className: "field" }, h("span", null, "Obszar"),
-          h("input", { value: obszar, placeholder: "puste = wszystko", onChange: (e) => setObszar(e.target.value) })),
+        h(WyborObszaru, { rodzaj, value: obszar, onChange: setObszar, onError: setError }),
         h("div", { className: "actions" },
           host.can("prg.import") && h("button", { className: "primary", disabled: busy || !r || !r.porownanie || !r.w_rejestrze, onClick: start }, "Porównaj"))),
       h("table", { className: "grid", style: { marginTop: 12 } },

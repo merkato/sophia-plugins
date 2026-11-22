@@ -42,6 +42,9 @@ async def startup() -> None:
                                WHERE status = 'scalanie'""")
         await conn.execute("""UPDATE prg.porownanie SET status = 'blad', postep = 'Przerwane restartem serwera', zakonczono = now()
                                WHERE status = 'w_toku'""")
+        await conn.execute("""UPDATE prg.slownik_stan SET status = CASE WHEN pobrano IS NULL THEN 'blad' ELSE 'gotowy' END,
+                                     postep = CASE WHEN pobrano IS NULL THEN 'Przerwane restartem serwera' END
+                               WHERE status = 'pobieranie'""")
 
 
 def _conninfo() -> str:
@@ -347,4 +350,66 @@ async def comparison_map(por_id: int, nr: int, crs: int = 4326, _: CurrentUser =
 async def comparison_delete(por_id: int, _: CurrentUser = Depends(IMPORT)):
     async with portal_conn() as conn:
         await conn.execute("DELETE FROM prg.porownanie WHERE id = %s AND status <> 'w_toku'", (por_id,))
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------- słownik jednostek (wybór obszaru po nazwie)
+
+
+def _load_dictionary() -> None:
+    """Wątek: listy jednostek z usługi WFS PRG (bez geometrii, kilka minut) → prg.jednostka."""
+    with psycopg.connect(_conninfo()) as conn:
+        try:
+            for i, poziom in enumerate(zrodla.SLOWNIK_WARSTWY, 1):
+                conn.execute("UPDATE prg.slownik_stan SET postep = %s",
+                             (f"Pobieranie listy {i} z {len(zrodla.SLOWNIK_WARSTWY)}…",))
+                conn.commit()
+                rows = zrodla.pobierz_slownik(poziom)
+                conn.execute("DELETE FROM prg.jednostka WHERE poziom = %s", (poziom,))
+                with conn.cursor() as cur:
+                    cur.executemany("INSERT INTO prg.jednostka (poziom, kod, nazwa) VALUES (%s, %s, %s)",
+                                    [(poziom, k, n) for k, n in rows])
+                conn.commit()
+            conn.execute("UPDATE prg.slownik_stan SET status = 'gotowy', postep = NULL, pobrano = now()")
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            msg = str(exc) if isinstance(exc, zrodla.ZrodloError) else f"Błąd: {exc}"
+            conn.execute("UPDATE prg.slownik_stan SET status = 'blad', postep = %s", (msg,))
+            conn.commit()
+
+
+async def _start_dictionary() -> bool:
+    """Uruchamia pobieranie słownika, jeśli nie trwa (wiersz stanu jako blokada)."""
+    async with portal_conn() as conn:
+        row = await (await conn.execute(
+            """INSERT INTO prg.slownik_stan (status, postep) VALUES ('pobieranie', 'W kolejce')
+               ON CONFLICT (id) DO UPDATE SET status = 'pobieranie', postep = 'W kolejce'
+                WHERE prg.slownik_stan.status <> 'pobieranie'
+               RETURNING id""")).fetchone()
+    if row:
+        threading.Thread(target=_load_dictionary, daemon=True, name="prg-slownik").start()
+    return bool(row)
+
+
+@router.get("/obszary")
+async def areas(_: CurrentUser = Depends(VIEW)):
+    """Jednostki do wyboru obszaru: obręby — województwo → powiat → jednostka ewidencyjna; nadleśnictwa —
+    RDLP → nadleśnictwo. Przy pierwszym użyciu lista jest pobierana z usługi PRG w tle."""
+    async with portal_conn() as conn:
+        st = await (await conn.execute("SELECT status, postep, pobrano FROM prg.slownik_stan")).fetchone()
+        if st is None:
+            await _start_dictionary()
+            st = {"status": "pobieranie", "postep": "W kolejce", "pobrano": None}
+        rows = await (await conn.execute("SELECT poziom, kod, nazwa FROM prg.jednostka ORDER BY poziom, kod")).fetchall()
+    out: dict[str, list] = {p: [] for p in zrodla.SLOWNIK_WARSTWY}
+    for r in rows:
+        out[r["poziom"]].append([r["kod"], r["nazwa"]])
+    return {"stan": st, "poziomy": zrodla.POZIOMY, "jednostki": out}
+
+
+@router.post("/obszary/odswiez")
+async def areas_refresh(_: CurrentUser = Depends(IMPORT)):
+    if not await _start_dictionary():
+        raise HTTPException(status.HTTP_409_CONFLICT, "Lista jednostek jest właśnie pobierana")
     return {"ok": True}

@@ -65,3 +65,14 @@ def test_plik_w_paczce(tmp_path):
     bad.write_text("nie zip")
     with pytest.raises(zrodla.ZrodloError):
         zrodla.plik_w_paczce(bad, NAD)
+
+
+def test_parsuj_slownik():
+    xml = ("<wfs:FeatureCollection><wfs:member><ms:A02><ms:JPT_KOD_JE>1001</ms:JPT_KOD_JE>"
+           "<ms:JPT_NAZWA_>powiat bełchatowski</ms:JPT_NAZWA_></ms:A02></wfs:member>"
+           "<wfs:member><ms:A02><ms:JPT_NAZWA_>Kraków &amp; okolice</ms:JPT_NAZWA_><ms:JPT_KOD_JE>1261</ms:JPT_KOD_JE></ms:A02></wfs:member>"
+           "<wfs:member><ms:A02><ms:JPT_KOD_JE>1001</ms:JPT_KOD_JE><ms:JPT_NAZWA_>dubel</ms:JPT_NAZWA_></ms:A02></wfs:member>"
+           "<wfs:member><ms:A02><ms:JPT_KOD_JE></ms:JPT_KOD_JE><ms:JPT_NAZWA_>bez kodu</ms:JPT_NAZWA_></ms:A02></wfs:member>"
+           "</wfs:FeatureCollection>").encode()
+    assert zrodla.parsuj_slownik(xml) == [("1001", "powiat bełchatowski"), ("1261", "Kraków & okolice")]
+    assert set(zrodla.POZIOMY["obreb"]) | set(zrodla.POZIOMY["nadlesnictwo"]) == set(zrodla.SLOWNIK_WARSTWY)

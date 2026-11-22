@@ -15,8 +15,15 @@ duplikatów i porównaniem z granicami z innego źródła (np. danymi udostępni
 - **plik z paczki PRG** z geoportalu — ZIP z plikami SHP (wtyczka wybiera plik rodzaju po nazwie: `…obreb…`,
   `…nadles…`, albo jedyny SHP w paczce) albo GML; wysyłany w częściach (do 3 GB).
 
-**Obszar** — początki kodów: obręby — województwo `14`, powiat `1465`, gmina `146502_8`; nadleśnictwa — RDLP `17`
-albo nadleśnictwo `17-02`. Puste = cały kraj. Z pliku trafiają tylko obiekty z obszaru.
+**Obszar** (od 1.0.1 wybierany po nazwie): obręby — województwo → powiat → jednostka ewidencyjna (gmina, część
+gminy, dzielnica); nadleśnictwa — RDLP → nadleśnictwo. „Dodaj do obszaru” dopisuje jednostkę, można dodać kilka;
+pusto = cały kraj. Pod spodem obszar to początki kodów (np. powiat `1001`, jednostka `146502_8`, RDLP `17`) — można
+je też wpisać. Lista jednostek pochodzi z usługi WFS PRG (bez geometrii) i jest pobierana w tle przy pierwszym
+użyciu (kilka minut — usługa PRG odpowiada wolno), potem trzymana w `prg.jednostka`; „odśwież” pobiera ją ponownie. Z pliku trafiają tylko
+obiekty z obszaru.
+
+Przykładowe czasy pobrania z WFS: powiat — 243 obręby w 6 s; miasto na prawach powiatu (1742 obręby) — 8 s;
+województwo (4732 obręby) — 78 s; wszystkie nadleśnictwa (429) — 81 s.
 
 ## Zasady
 - Klucz obiektu: identyfikator IIP `przestrzeńNazw:identyfikator` (bez IIP — `JPT:<JPT_ID>`).

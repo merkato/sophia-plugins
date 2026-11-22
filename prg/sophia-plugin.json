@@ -1,7 +1,7 @@
 {
   "id": "prg",
   "name": "PRG — granice z Państwowego Rejestru Granic",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Obręby ewidencyjne i nadleśnictwa z Państwowego Rejestru Granic (usługa WFS GUGiK albo paczka SHP) w schemacie prg: podgląd zmian przed zapisem, kontrola duplikatów, stan bieżący i historia wersji; porównanie z granicami z innego źródła (np. danymi Lasów Państwowych) z warstwą rozbieżności.",
   "sophia": ">=0.8",
   "requires": {},

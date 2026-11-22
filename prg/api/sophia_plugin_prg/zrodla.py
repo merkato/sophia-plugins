@@ -188,3 +188,56 @@ def pobierz_strony(rodzaj: Rodzaj, obszar: list[str], katalog: Path, postep=None
             if ile < rodzaj.strona:
                 return
             start += ile
+
+
+# ---------------------------------------------------------------------------- słownik jednostek (wybór obszaru)
+
+# poziom → warstwa WFS; kody jednostek ewidencyjnych (np. 146502_8) to początki identyfikatorów obrębów
+SLOWNIK_WARSTWY = {
+    "wojewodztwo": "ms:A01_Granice_wojewodztw",
+    "powiat": "ms:A02_Granice_powiatow",
+    "jednostka_ew": "ms:A05_Granice_jednostek_ewidencyjnych",
+    "rdlp": "ms:U07_Regionalna_dyrekcja_lasow_panstwowych",
+    "nadlesnictwo": "ms:U06_Nadlesnictwo",
+}
+POZIOMY = {"obreb": ("wojewodztwo", "powiat", "jednostka_ew"), "nadlesnictwo": ("rdlp", "nadlesnictwo")}
+_MEMBER_RE = re.compile(rb"<wfs:member>(.*?)</wfs:member>", re.S)
+_KOD_RE = re.compile(rb"<ms:JPT_KOD_JE>([^<]*)</ms:JPT_KOD_JE>")
+_NAZWA_RE = re.compile(rb"<ms:JPT_NAZWA_>([^<]*)</ms:JPT_NAZWA_>")
+
+
+def parsuj_slownik(xml: bytes) -> list[tuple[str, str]]:
+    """Odpowiedź GetFeature z polami JPT_KOD_JE i JPT_NAZWA_ → posortowane (kod, nazwa), bez dubli kodu."""
+    from html import unescape
+
+    out: dict[str, str] = {}
+    for m in _MEMBER_RE.finditer(xml):
+        k, n = _KOD_RE.search(m[1]), _NAZWA_RE.search(m[1])
+        if k and n:
+            kod, nazwa = unescape(k[1].decode()).strip(), unescape(n[1].decode()).strip()
+            if kod and nazwa:
+                out.setdefault(kod, nazwa)
+    return sorted(out.items())
+
+
+def pobierz_slownik(poziom: str) -> list[tuple[str, str]]:
+    """Kody i nazwy jednostek poziomu z usługi WFS PRG (bez geometrii)."""
+    import httpx
+
+    p = {"service": "WFS", "version": "2.0.0", "request": "GetFeature", "typeNames": SLOWNIK_WARSTWY[poziom],
+         "PROPERTYNAME": "JPT_KOD_JE,JPT_NAZWA_"}
+    blad = "brak odpowiedzi"
+    for proba in range(3):
+        try:
+            r = httpx.get(WFS_URL, params=p, timeout=TIMEOUT, follow_redirects=True)
+            if r.status_code == 200 and b"ExceptionReport" not in r.content[:2000]:
+                wynik = parsuj_slownik(r.content)
+                if wynik:
+                    return wynik
+                blad = "pusta lista"
+            else:
+                blad = f"HTTP {r.status_code}"
+        except httpx.HTTPError as e:
+            blad = type(e).__name__
+        time.sleep(5 * (proba + 1))
+    raise ZrodloError(f"Nie udało się pobrać listy jednostek ({poziom}) z usługi PRG: {blad}")
