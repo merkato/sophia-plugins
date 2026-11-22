@@ -7,8 +7,8 @@ export function register(host) {
   const { useEffect, useState, useCallback, useRef } = React;
 
   // ------------------------------------------------------------------ okno „Szukaj”
-  function OknoSzukaj() {
-    const [q, setQ] = useState("");
+  function OknoSzukaj({ props }) {
+    const [q, setQ] = useState(props.q || "");
     const [wynik, setWynik] = useState(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
@@ -16,6 +16,8 @@ export function register(host) {
     const nr = useRef(0);
     const input = useRef(null);
     useEffect(() => { if (input.current) input.current.focus(); }, []);
+    // ponowne wyszukanie z pola w pasku narzędzi (okno już otwarte)
+    useEffect(() => { if (typeof props.q === "string") setQ(props.q); }, [props.q, props.n]);
     // projekt mapy mógł się zmienić od otwarcia okna
     useEffect(() => { const t = setInterval(() => setProjekt(host.currentProject()), 1000); return () => clearInterval(t); }, []);
     const szukaj = useCallback((tekst) => {
@@ -114,5 +116,21 @@ export function register(host) {
             h("td", null, l.fields.filter((f) => f.widget !== "Hidden").map((f) => chip(l.id, "etykieta", f))))))));
   }
 
-  return { pages: { konfiguracja: Konfiguracja }, windows: { szukaj: OknoSzukaj } };
+  // ------------------------------------------------------------------ pole „Szukaj” w pasku narzędzi
+  const IkonaLupy = () => h("svg", { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+    strokeWidth: 2.2, strokeLinecap: "round", "aria-hidden": true },
+    h("circle", { cx: 10.5, cy: 10.5, r: 6.5 }), h("path", { d: "M15.5 15.5 21 21" }));
+
+  function PoleSzukaj() {
+    const [q, setQ] = useState("");
+    if (!host.can("wyszukiwarka.szukaj")) return null;
+    const szukaj = () => host.openWindow("szukaj", { props: { q: q.trim(), n: Date.now() } });
+    return h("form", { className: "toolbar-field", role: "search", onSubmit: (e) => { e.preventDefault(); szukaj(); } },
+      h("label", { htmlFor: "wyszukiwarka-pole" }, "Szukaj"),
+      h("input", { id: "wyszukiwarka-pole", type: "search", value: q, placeholder: "działka, znak sprawy, nazwa…",
+        onChange: (e) => setQ(e.target.value) }),
+      h("button", { type: "submit", title: "Szukaj w projekcie", "aria-label": "Szukaj" }, h(IkonaLupy)));
+  }
+
+  return { pages: { konfiguracja: Konfiguracja }, windows: { szukaj: OknoSzukaj }, toolbar: PoleSzukaj };
 }

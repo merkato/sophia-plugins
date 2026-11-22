@@ -1,0 +1,19 @@
+{
+  "id": "wyglad",
+  "name": "Wygląd",
+  "version": "1.0.0",
+  "description": "Skórki interfejsu Sophii: gotowe motywy (Sophia, Grafit, Lasy Państwowe), własne motywy z edytorem kolorów (tryb jasny i ciemny), nazwa aplikacji i logo w górnym pasku (PNG albo WEBP), ikona karty przeglądarki.",
+  "sophia": ">=0.8",
+  "requires": {},
+  "capabilities": [
+    {"id": "wyglad.konfiguracja", "title": "Zmiana wyglądu (motywy, logo, nazwa aplikacji)"}
+  ],
+  "api": {"package": "sophia_plugin_wyglad"},
+  "web": {
+    "entry": "web/index.js",
+    "menu": "Wygląd",
+    "pages": [
+      {"id": "wyglad", "title": "Wygląd", "capability": "wyglad.konfiguracja"}
+    ]
+  }
+}

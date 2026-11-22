@@ -1,7 +1,7 @@
 {
   "id": "eksport",
   "name": "Eksport danych",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Pobieranie danych do XLSX, CSV, GeoPackage i paczki SHP (mLas): warstwy projektu wskazane przez administratora (cały zakres albo bieżący widok mapy) oraz zestawienia udostępniane przez inne wtyczki. Zakres danych użytkownika zawsze obowiązuje; każde pobranie trafia do dziennika.",
   "sophia": ">=0.7",
   "requires": {},
@@ -22,7 +22,7 @@
       {"id": "dziennik", "title": "Dziennik pobrań", "capability": "eksport.konfiguracja"}
     ],
     "windows": [
-      {"id": "pobierz", "title": "Pobierz", "capability": "eksport.pobieranie"}
+      {"id": "pobierz", "title": "Pobierz", "capability": "eksport.pobieranie", "order": 900}
     ]
   }
 }
