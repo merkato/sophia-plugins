@@ -27,6 +27,15 @@ Pomijane: klasoużytki, kontury klasyfikacyjne, dokumenty, operaty, budynki, pod
   działki. Widok `egib.v_dzialka_uzytki` (użytki działki, udział `Ls`), funkcja `egib.dzialka_na_dzien()`.
 - Klauzula (`*.klauzula.xml`) — suma kontrolna sprawdzana z plikiem, organ i data kopii w dzienniku.
 
+## Ochrona danych z importu (od 1.6, Sophia ≥ 0.10)
+- Działki i użytki z GML (`zrodlo = 'EGiB'` w `v_dzialka` / `v_uzytek`) są w manifeście obiektami chronionymi
+  (`protected`): na mapie tylko do odczytu, API Sophii odrzuca ich zmianę. Działki z ULDK i uzupełnienia użytków —
+  bez zmian (edytowalne przez widok).
+- Bezpiecznik Sophii (Panel → Projekty → „Odblokuj obiekty chronione…”, na określony czas, administrator
+  i zarządzający): wyzwalacze widoków (migracja 007) przyjmują wtedy zmianę bieżącego wiersza rejestru — geometria,
+  powierzchnia ewidencyjna (działka), OFU (użytek). Usunięcie danych GML — zawsze tylko kolejnym importem.
+  Zmiana ręczna zostaje do importu, który przyniesie nową wersję obiektu.
+
 ## Uprawnienia
 - `egib.import` — strona „EGiB — importy”: wysyłka plików, podgląd zmian, zakres, zatwierdzanie.
 - `egib.podglad` — strona „EGiB — rejestr”: wyszukiwanie działek, użytki, historia, zmiany;
