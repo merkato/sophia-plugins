@@ -23,7 +23,7 @@ FORMATY = {
     "xlsx": {"tytul": "Excel (XLSX)", "przestrzenny": False},
     "csv": {"tytul": "CSV (średnik, UTF-8)", "przestrzenny": False},
     "gpkg": {"tytul": "GeoPackage", "przestrzenny": True},
-    "mlas": {"tytul": "Paczka mLas (SHP, EPSG:2180)", "przestrzenny": True},
+    "mlas": {"tytul": "SHP (mLas, EPSG:2180)", "przestrzenny": True},
 }
 TYPY_GEOM = {"POINT": "Point", "MULTIPOINT": "MultiPoint", "LINESTRING": "LineString", "MULTILINESTRING": "MultiLineString",
              "POLYGON": "Polygon", "MULTIPOLYGON": "MultiPolygon"}
@@ -110,7 +110,7 @@ def _zapisz_tabele(path: Path, t: Tabela, driver: str, *, append: bool, z_geomet
 
 def zapisz(fmt: str, tabele: list[Tabela], katalog: Path, nazwa: str, kodowanie_shp: str = "UTF-8") -> tuple[Path, str]:
     """Plik do pobrania (ścieżka, typ MIME). Kilka tabel: GeoPackage / XLSX — warstwy / arkusze w jednym pliku,
-    CSV i SHP — archiwum ZIP (paczka mLas zawsze ZIP). `katalog` — nowy, pusty katalog tymczasowy."""
+    CSV i SHP — archiwum ZIP (SHP mLas zawsze ZIP). `katalog` — nowy, pusty katalog tymczasowy."""
     base = ascii_nazwa(nazwa)
     for stary in katalog.glob(f"{base}*"):      # ponowny zapis w tym samym katalogu (testy) — od zera
         stary.unlink()

@@ -1,12 +1,12 @@
 {
   "id": "eksport",
   "name": "Eksport danych",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Pobieranie danych do XLSX, CSV, GeoPackage i paczki SHP (mLas): warstwy projektu wskazane przez administratora (cały zakres albo bieżący widok mapy) oraz zestawienia udostępniane przez inne wtyczki. Zakres danych użytkownika zawsze obowiązuje; każde pobranie trafia do dziennika.",
   "sophia": ">=0.7",
   "requires": {},
   "settings": [
-    {"id": "kodowanie_shp", "title": "Kodowanie plików SHP (paczka mLas)", "type": "text",
+    {"id": "kodowanie_shp", "title": "Kodowanie plików SHP (mLas)", "type": "text",
      "description": "UTF-8 albo CP1250 — według wymagań programu, który wczytuje paczkę. Puste: UTF-8."}
   ],
   "capabilities": [

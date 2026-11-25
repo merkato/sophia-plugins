@@ -99,7 +99,7 @@ export function register(host) {
             p.opcje.map((o) => h("option", { key: o.wartosc, value: o.wartosc }, o.etykieta)))))],
       row("Format", h("select", { value: fmt, onChange: (e) => setFormat(e.target.value) },
         formatyDla.map((f) => h("option", { key: f.id, value: f.id }, f.tytul)))),
-      fmt === "mlas" && h("p", { className: "muted", style: { fontSize: 12 } }, "Paczka mLas: tylko warstwy przestrzenne, SHP w EPSG:2180, w archiwum ZIP."),
+      fmt === "mlas" && h("p", { className: "muted", style: { fontSize: 12 } }, "SHP (mLas): tylko warstwy przestrzenne, SHP w EPSG:2180, w archiwum ZIP."),
       (fmt === "xlsx" || fmt === "csv") && h("p", { className: "muted", style: { fontSize: 12 } }, "XLSX i CSV: same atrybuty (bez geometrii), nagłówki i wartości słownikowe czytelne."),
       h("div", { className: "actions" },
         h("button", { className: "primary", disabled: busy || !mozna, onClick: start }, busy ? "Przygotowywanie pliku…" : "Pobierz")),

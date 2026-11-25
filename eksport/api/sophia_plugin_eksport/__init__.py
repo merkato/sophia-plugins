@@ -8,7 +8,7 @@
           [{"id", "tytul", "przestrzenne": bool, "parametry": [{"id", "etykieta", "opcje": [{"wartosc", "etykieta"}]}]}]
       async def eksport_dane(id, user, parametry: dict, fmt: str) -> list[dict]
           [{"nazwa", "kolumny": [str], "wiersze": [tuple], "geometria": [WKB] | None, "typy_geom": [str], "srid": int}]
-* Paczka mLas — tylko warstwy przestrzenne, SHP w EPSG:2180, kodowanie z ustawień wtyczki, w archiwum ZIP.
+* SHP (mLas) — tylko warstwy przestrzenne, SHP w EPSG:2180, kodowanie z ustawień wtyczki, w archiwum ZIP.
 Każde pobranie trafia do dziennika (kto, co, kiedy, ile wierszy).
 
 Endpointy pod /api/plugins/eksport/…:
@@ -164,7 +164,7 @@ async def _plik(fmt: str, tabele: list[Tabela], nazwa: str, user: CurrentUser, p
     if fmt == "mlas":
         tabele = [t for t in tabele if t.geometria is not None]
         if not tabele:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Paczka mLas obejmuje tylko warstwy przestrzenne")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "SHP (mLas) obejmuje tylko warstwy przestrzenne")
     kod = ((await get_settings_for("eksport")).get("kodowanie_shp") or "UTF-8").strip()
     katalog = Path(tempfile.mkdtemp(dir=data_dir("eksport")))
     try:
